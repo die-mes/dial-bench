@@ -20,6 +20,10 @@ const nh = (mv, lbl, short, fits, win, src) => ({mv, lbl, short, fits, R:14.25, 
 const TPL = {
   'NH34-3H': {...nh('NH34','GMT · date window 3H','3H','NH34 (GMT)',[{x:10.55,y:0,w:2.90,h:2.00}],'TMI NH34A spec sheet, Dial page v2'), hole:2.88},
   'NH34-6H': {...nh('NH34','GMT · date window 6H','6H','NH34 (GMT)',[{x:0,y:-10.55,w:2.00,h:2.90}],'TMI NH34A spec sheet, Dial page v2'), hole:2.88},
+  'NH37-3H': {...nh('NH37','Date 3H · small 24-hour','3H','NH37',[{x:10.55,y:0,w:2.90,h:2.00}],'TMI NH37A spec sheet, Dial page'), subs:{s24:{x:-3.656,y:4.478,n:'24-hour dial (10:40)'}}, sh:0.80, smax:7.0, smaxNote:true},
+  'NH37-6H': {...nh('NH37','Date 6H · small 24-hour','6H','NH37',[{x:0,y:-10.55,w:2.00,h:2.90}],'TMI NH37A spec sheet, Dial page'), subs:{s24:{x:-3.656,y:4.478,n:'24-hour dial (10:40)'}}, sh:0.80, smax:7.0, smaxNote:true},
+  'NH38': {...nh('NH38','No date','No date','NH38',[],'TMI NH38A spec sheet, Dial page'), ohMax:{x:-6.827,y:-0.558,d:10.00}},
+  'NH38-OH': {...nh('NH38','Open heart (largest opening)','Open heart','NH38',[{x:-6.827,y:-0.558,d:10.00}],'TMI NH38A spec sheet, Dial page')},
   'NH35-3H': nh('NH35','Date window · 3H','3H','NH35 · 4R35',[{x:10.55,y:0,w:2.90,h:2.00}],'TMI NH35A spec sheet, Dial page'),
   'NH35-6H': nh('NH35','Date window · 6H','6H','NH35 · 4R35',[{x:0,y:-10.55,w:2.00,h:2.90}],'TMI NH35A spec sheet, Dial page'),
   'NH36-3H': nh('NH36','Day-date window · 3H','3H','NH36 · 4R36 · 7S26 · 7S36',[{x:8.45,y:0,w:7.00,h:2.00}],'TMI NH36A spec sheet, Dial page v2'),
@@ -162,7 +166,7 @@ function ctrOf(o) {
   const t = T(); if (t.subs && t.subs[c]) return [t.subs[c].x, -t.subs[c].y];
   return [o.cx || 0, o.cy || 0];
 }
-const tplWins = (t = T()) => t.win.map(w => rectP(w.x, -w.y, w.w, w.h, 0, w.r || 0));
+const tplWins = (t = T()) => t.win.map(w => w.d ? circ(w.x, -w.y, w.d / 2) : rectP(w.x, -w.y, w.w, w.h, 0, w.r || 0));
 function dialPoly(t = T()) {
   if (t.panel) { const p = doc.panel; return p.shape === 'ellipse' ? ellP(0, 0, p.w / 2, p.h / 2, 0) : rectP(0, 0, p.w, p.h, 0, p.cr || 0); }
   const R = t.R; if (!t.flats) return circ(0, 0, R);
@@ -460,6 +464,7 @@ function drawGuides() {
   if (G.hole && t.hole) add_(sv('circle', {cx:0, cy:0, r:t.hole / 2, fill:'url(#hatch)', stroke:'var(--warn)', 'stroke-width':1, 'vector-effect':'non-scaling-stroke'}));
   if (G.win) for (const p of tplWins(t)) add_(sv('path', {d:pd([p]), fill:'url(#hatch)', stroke:'var(--warn)', 'stroke-width':1.2, 'vector-effect':'non-scaling-stroke'}));
   if (G.feet) for (const [x, y] of t.feet) { const Y = -y; add_(sv('circle', {cx:x, cy:Y, r:t.fd / 2, ...ln, stroke:'var(--warn)'})); add_(sv('path', {d:`M${x - 0.6} ${Y}H${x + 0.6}M${x} ${Y - 0.6}V${Y + 0.6}`, ...ln, stroke:'var(--warn)'})); }
+  if (G.win && t.ohMax) add_(sv('circle', {cx:t.ohMax.x, cy:-t.ohMax.y, r:t.ohMax.d / 2, ...ln, 'stroke-dasharray':'2 3'}));
   if (G.subs && t.subs) for (const s of Object.values(t.subs)) { add_(sv('circle', {cx:s.x, cy:-s.y, r:t.smax / 2, ...ln, 'stroke-dasharray':'4 4'})); add_(sv('circle', {cx:s.x, cy:-s.y, r:t.sh / 2, fill:'url(#hatch)', stroke:'var(--warn)', 'stroke-width':1, 'vector-effect':'non-scaling-stroke'})); }
 }
 function drawObjs() {
@@ -956,10 +961,11 @@ function pTpl() {
     const L = v => `${(v / 25.4).toFixed(4)}" (${v.toFixed(2)})`;
     const rows = [['Dial diameter', `${L(2 * t.R)} ${t.dTol}`], ['Dial thickness', L(t.th) + ' ±0.04'], ['Center hole', L(t.hole) + ' ±0.05']];
     if (t.flats) rows.push(['Crown-side flats', `2 × at 2H and 4H, ${L(t.flatD)} from center`]);
-    t.win.forEach(w => rows.push(['Window', `${L(w.w)} × ${L(w.h)}`], ['Window center', `x ${L(w.x)}, y ${L(w.y)}`]));
+    t.win.forEach(w => rows.push(w.d ? ['Open-heart opening', `Ø ${L(w.d)} (largest allowed)`] : ['Window', `${L(w.w)} × ${L(w.h)}`], [w.d ? 'Opening center' : 'Window center', `x ${L(w.x)}, y ${L(w.y)}`]));
+    if (t.ohMax) rows.push(['Open-heart option', `up to Ø ${L(t.ohMax.d)} at x ${L(t.ohMax.x)}, y ${L(t.ohMax.y)}`]);
     t.feet.forEach((f, i) => rows.push([`Foot ${i + 1}`, `x ${L(f[0])}, y ${L(f[1])}`]));
     rows.push(['Feet', `Ø ${L(t.fd)} × ${L(t.fl)} long`]);
-    if (t.subs) { for (const sb of Object.values(t.subs)) rows.push([sb.n, `${L(Math.hypot(sb.x, sb.y))} from center`]); rows.push(['Subdial hand holes', 'Ø ' + L(t.sh)], ['Largest subdial', 'Ø ' + L(t.smax)]); }
+    if (t.subs) { for (const sb of Object.values(t.subs)) rows.push([sb.n, `${L(Math.hypot(sb.x, sb.y))} from center`]); rows.push(['Subdial hand holes', 'Ø ' + L(t.sh)], t.smaxNote ? ['Subdial size', `not set by Seiko; guide shows Ø ${L(t.smax)} as a start`] : ['Largest subdial', 'Ø ' + L(t.smax)]); }
     secEl('Certified geometry', h('div', {}, h('span', {class:'badge'}, 'From Seiko / TMI drawing')),
       h('div', {style:'overflow-x:auto'}, h('table', {class:'spec'}, h('tbody', {}, rows.map(([a, b]) => h('tr', {}, h('td', {}, a), h('td', {}, b)))))),
       h('p', {class:'src', style:'margin:0'}, `Source: ${t.src}. Inches first, mm in brackets. X right, Y up from dial center.`));
@@ -1128,9 +1134,9 @@ function jobLines(v, st) {
     L.push(['h', 'PART'], `- Watch dial for Seiko ${t.mv} movements, ${t.lbl} (fits ${t.fits})`, `- Brass, ${(t.th / 25.4).toFixed(4)}" ±0.0016" thick (${t.th.toFixed(2)} ±0.04 mm), Seiko spec`,
       `- Diameter ${inmm(2 * t.R)}${t.dTol ? ' ' + t.dTol + ' mm' : ''}${t.flats ? ', with two flats on the crown side' : ''}, Seiko spec`, `- Center hole Ø${inmm(t.hole)} ±0.05 mm, Seiko spec`,
       `- ${t.feet.length} dial feet on the back, Ø${inmm(t.fd)}. Please don't bend or heat them.`, job !== 'cut' ? `- Dials supplied by me: ${st.supplied ? 'yes' : 'no, quote the blanks too'}` : '');
-    L.push(['h', 'TOLERANCES I NEED'], `- Artwork centered on the center hole within ±${inmm2(tol.pos)}`, `- 12 o'clock aligned within ±${tol.rot}°`, '- No engraving inside the date window or center hole');
+    L.push(['h', 'TOLERANCES I NEED'], `- Artwork centered on the center hole within ±${inmm2(tol.pos)}`, `- 12 o'clock aligned within ±${tol.rot}°`, `- No engraving inside ${t.win.length ? (t.win[0].d ? 'the open-heart opening' : 'the date window') + ' or ' : ''}the center hole`);
     if (t.back) L.push(`- Back side stays flat: no burrs or raised edges inside the center ${inmm(15.5)} zone or on the outer mounting ring, ${inmm(25.6)} to ${inmm(28.5)}. Seiko's drawing allows +0.05 / −0.02 mm (+0.0020" / −0.0008") there.`);
-    if (job !== 'engrave') L.push(`- Cut outline Ø${inmm(2 * t.R)} ±0.05 mm and center hole Ø${inmm(t.hole)} ±0.05 mm (Seiko spec)`, `- Windows within ±${inmm2(tol.pos)} of the drawing`, '- Deburred, flat, no heat discoloration');
+    if (job !== 'engrave') L.push(`- Cut outline Ø${inmm(2 * t.R)} ±0.05 mm and center hole Ø${inmm(t.hole)} ±0.05 mm (Seiko spec)`, t.win.length ? `- ${t.win[0].d ? 'Open-heart opening' : 'Windows'} within ±${inmm2(tol.pos)} of the drawing` : '', '- Deburred, flat, no heat discoloration');
   }
   L.push(['h', 'ARTWORK'], `- ${nE} element(s) on the Engrave layer${bev ? `, plus ${bev} bevel step layer(s) (one extra pass each)` : ''}`);
   if (isFinite(sm.line)) L.push(`- Thinnest line: ${inmm(sm.line)}`);
@@ -1354,7 +1360,7 @@ function jobSheetPDF(L, vendor, st0) {
   let y3 = 150; const ln = s => { P3.col(0, 0, 0); P3.t(54, y3, 9.5, s); y3 -= 12.5; };
   if (t.panel) ln(`Panel ${inmm2(Wmm)} × ${inmm2(Hmm)}${doc.panel.cr ? `, corner radius ${inmm2(doc.panel.cr)}` : ''}.`);
   else { ln(`Dial Ø ${inmm(2 * t.R)} ${t.dTol ? t.dTol + ' mm' : ''}. Center hole Ø ${inmm(t.hole)} ±0.05 mm. Red dashed = hole, windows and feet (no engraving inside).`);
-    t.win.forEach(w => ln(`Window ${inmm2(w.w)} × ${inmm2(w.h)}, centered at x ${inmm2(w.x)}, y ${inmm2(w.y)} (Y up).`)); ln(`Source: ${t.src}.`); }
+    t.win.forEach(w => ln(w.d ? `Open-heart opening Ø ${inmm2(w.d)}, centered at x ${inmm2(w.x)}, y ${inmm2(w.y)} (Y up).` : `Window ${inmm2(w.w)} × ${inmm2(w.h)}, centered at x ${inmm2(w.x)}, y ${inmm2(w.y)} (Y up).`)); ln(`Source: ${t.src}.`); }
   P3.t(430, 30, 8.5, 'Page 3 of 3  ·  Dial Bench');
   return pdfBytes([P1, P2, P3]);
 }
