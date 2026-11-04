@@ -18,6 +18,8 @@ const ICON_PICKS = ['anchor','star','bolt','water_drop','sailing','flight','expl
 const NHF = [[9.672, 8.667], [-9.466, -8.930]];
 const nh = (mv, lbl, short, fits, win, src) => ({mv, lbl, short, fits, R:14.25, dTol:'±0.05', hole:2.05, th:0.40, win, feet:NHF, fd:0.64, fl:2.15, back:1, src});
 const TPL = {
+  'NH34-3H': {...nh('NH34','GMT · date window 3H','3H','NH34 (GMT)',[{x:10.55,y:0,w:2.90,h:2.00}],'TMI NH34A spec sheet, Dial page v2'), hole:2.88},
+  'NH34-6H': {...nh('NH34','GMT · date window 6H','6H','NH34 (GMT)',[{x:0,y:-10.55,w:2.00,h:2.90}],'TMI NH34A spec sheet, Dial page v2'), hole:2.88},
   'NH35-3H': nh('NH35','Date window · 3H','3H','NH35 · 4R35',[{x:10.55,y:0,w:2.90,h:2.00}],'TMI NH35A spec sheet, Dial page'),
   'NH35-6H': nh('NH35','Date window · 6H','6H','NH35 · 4R35',[{x:0,y:-10.55,w:2.00,h:2.90}],'TMI NH35A spec sheet, Dial page'),
   'NH36-3H': nh('NH36','Day-date window · 3H','3H','NH36 · 4R36 · 7S26 · 7S36',[{x:8.45,y:0,w:7.00,h:2.00}],'TMI NH36A spec sheet, Dial page v2'),
