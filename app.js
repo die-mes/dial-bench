@@ -110,7 +110,7 @@ function hits(poly, ex) {
 }
 
 /* ================= document ================= */
-let doc, proj, tool = 'sel', tab = 'obj', sel = null, gmode = 'obj';
+let doc, proj, tool = 'sel', step = 'setup', etab = 'edit', sel = null, gmode = 'obj';
 const panelT = () => ({mv:'Panel', lbl:doc.name || 'Panel', short:'', fits:'', R:Math.max(doc.panel.w, doc.panel.h) / 2, hole:0, th:0, win:[], feet:[], fd:0, fl:0, panel:true, src:''});
 const T = () => doc.kind === 'panel' ? panelT() : (TPL[doc.tpl] || TPL['NH36-3H']);
 function bnds() { const t = T(); if (t.panel) { const p = doc.panel; return [-p.w / 2, -p.h / 2, p.w / 2, p.h / 2]; } return [-t.R, -t.R, t.R, t.R]; }
@@ -182,7 +182,7 @@ function dialPoly(t = T()) {
 let hist = [], fut = [], last = '';
 function commit() {
   const j = JSON.stringify(doc); if (j === last) return;
-  hist.push(last); if (hist.length > 150) hist.shift(); fut = []; last = j; pfThin = []; persist(); updUndo();
+  hist.push(last); if (hist.length > 150) hist.shift(); fut = []; last = j; pfThin = []; persist(); updUndo(); bgCheckSoon();
 }
 function restore(j) { doc = JSON.parse(j); proj.designs[proj.cur] = doc; last = j; registerUserFonts(); if (!byId(sel)) sel = null; persist(); updUndo(); renderPanel(); syncChrome(); scheduleRender(); }
 function undo() { if (!hist.length) return; fut.push(last); restore(hist.pop()); }
@@ -444,19 +444,19 @@ function build(o) {
 function geomOf(o) { const k = gkey(o), c = GC.get(o.id); if (c && c.k === k) return c.g; let g; try { g = build(o); } catch (e) { console.error(e); g = {F:[], H:[], B:[], bb:null, dF:'', dH:'', dB:[]}; } GC.set(o.id, {k, g}); return g; }
 
 /* ================= view & render ================= */
-const svg = $('#cv'), gDial = $('#gDial'), gObj = $('#gObj'), gGuide = $('#gGuide'), gSel = $('#gSel'), gTmp = $('#gTmp');
-const view = {x:0, y:0, w:34};
+const svg = $('#cv'), gCase = $('#gCase'), gPrev = $('#gPrev'), gDial = $('#gDial'), gObj = $('#gObj'), gGuide = $('#gGuide'), gSel = $('#gSel'), gTmp = $('#gTmp');
+const view = {x:0, y:0, w:34, fitted:true};
 let raf = 0; const scheduleRender = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
 const sRect = () => svg.getBoundingClientRect();
 const pxmm = () => sRect().width / view.w;
 function updateView() { const r = sRect(), asp = (r.height || 1) / (r.width || 1), hh = view.w * asp; svg.setAttribute('viewBox', `${view.x - view.w / 2} ${view.y - hh / 2} ${view.w} ${hh}`); }
-function fit() { const r = sRect(), asp = (r.height || 1) / (r.width || 1), b = bnds(), W = (b[2] - b[0]) * 1.1, H = (b[3] - b[1]) * 1.1; view.x = (b[0] + b[2]) / 2; view.y = (b[1] + b[3]) / 2; view.w = Math.max(W, H / asp); scheduleRender(); }
+function fit() { const r = sRect(); if (!r.width || !doc) return; const asp = (r.height || 1) / (r.width || 1), b = prevOn() && !T().panel ? prevBounds() : bnds(), W = (b[2] - b[0]) * 1.1, H = (b[3] - b[1]) * 1.1; view.x = (b[0] + b[2]) / 2; view.y = (b[1] + b[3]) / 2; view.w = Math.max(W, H / asp); view.fitted = true; scheduleRender(); }
 function mmAt(X, Y) { const r = sRect(), hh = view.w * r.height / r.width; return [view.x - view.w / 2 + (X - r.left) / r.width * view.w, view.y - hh / 2 + (Y - r.top) / r.height * hh]; }
 let gkeyLast = '';
 function drawGuides() {
-  const t = T(), G = doc.guides, k = JSON.stringify([doc.tpl, doc.kind, doc.panel, G, doc.safe, doc.look, view.lume]); if (k === gkeyLast) return; gkeyLast = k;
+  const t = T(), G = doc.guides, pv = prevOn() && !t.panel, k = JSON.stringify([doc.tpl, doc.kind, doc.panel, G, doc.safe, doc.look, view.lume, pv]); if (k === gkeyLast) return; gkeyLast = k;
   gDial.replaceChildren(sv('path', {d:pd([dialPoly(t)]), fill:view.lume ? '#060606' : doc.look.dial}));
-  gGuide.replaceChildren();
+  gGuide.replaceChildren(); if (pv) return;
   const ln = {fill:'none', stroke:'var(--guide)', 'stroke-width':1, 'vector-effect':'non-scaling-stroke'};
   const add_ = e => gGuide.append(e);
   if (G.grid) { const g = sv('g', {opacity:.35}); for (let i = 0; i < 60; i++) { const [x1, y1] = pol(i % 5 ? t.R - 0.6 : 2.2, i * 6), [x2, y2] = pol(t.R, i * 6); g.append(sv('line', {x1, y1, x2, y2, ...ln})); } add_(g); }
@@ -489,7 +489,7 @@ function drawSel() {
   if (o.t === 'spl') for (const q of o.pts) gSel.append(sv('circle', {cx:q[0], cy:q[1], r:3.5 / pxmm(), fill:'var(--sel)'}));
 }
 function drawTmp() {
-  gTmp.replaceChildren(); if (pfThin.length) gTmp.append(sv('path', {d:pd(pfThin), fill:'#ff2a2a', 'fill-opacity':0.85, 'fill-rule':'evenodd'}));
+  gTmp.replaceChildren(); if (pfThin.length && (thinOn || (step === 'check' && tool === 'sel'))) gTmp.append(sv('path', {d:pd(pfThin), fill:'#ff2a2a', 'fill-opacity':0.85, 'fill-rule':'evenodd'}));
   if (tool !== 'spl' || !spl.length) return; const r = 3.5 / pxmm();
   gTmp.append(sv('path', {d:pd([splinePts(spl, false, true)], false), fill:'none', stroke:'var(--sel)', 'stroke-width':1.5, 'vector-effect':'non-scaling-stroke'}));
   spl.forEach((q, i) => gTmp.append(sv('circle', {cx:q[0], cy:q[1], r:i ? r : r * 1.6, fill:i ? 'var(--sel)' : 'none', stroke:'var(--sel)', 'stroke-width':1.5, 'vector-effect':'non-scaling-stroke'})));
@@ -500,10 +500,11 @@ const HINT = {sel:'Tap to select · drag to move · two fingers to scale and rot
 function hud() {
   const o = selObj(), el = $('#hud');
   if (tool !== 'sel') { el.textContent = HINT[tool] || ''; return; }
+  if (!o && prevOn() && !T().panel) { el.textContent = 'Preview · hands and case are never exported'; return; }
   if (!o) { el.textContent = (T().panel ? `${doc.name} · ${fmtL(doc.panel.w)} × ${fmtL(doc.panel.h)} ${UL()}` : `${T().mv} · Ø ${fmtL(2 * T().R)} ${UL()}`) + ' · tap a shape to edit it'; return; }
   const c = getC(o); el.textContent = `${o.name || TN[o.t]}` + (c ? ` · r ${fmtL(Math.hypot(...c))} ${UL()} · θ ${angOf(c).toFixed(1)}°` : (o.r ? ` · outer r ${fmtL(o.r)} ${UL()}` : ''));
 }
-function render() { if (!doc) return; updateView(); drawGuides(); drawObjs(); drawSel(); drawTmp(); hud(); syncFields(); }
+function render() { if (!doc) return; updateView(); drawGuides(); drawObjs(); drawPrev(); drawSel(); drawTmp(); hud(); syncFields(); }
 
 /* ================= object transforms ================= */
 function getC(o) {
@@ -580,11 +581,11 @@ svg.addEventListener('pointermove', e => {
     if (ptr.size < 2) return; const [a, b] = [...ptr.values()], f = dist(a, b) / act.d0, da = (Math.atan2(b[1] - a[1], b[0] - a[0]) - act.a0) / D2R;
     if (act.o0) scaleRot(act.o0, f, da);
     else { const r = sRect(), k0 = act.v0.w / r.width, mx = act.v0.x + (act.m0[0] - r.left - r.width / 2) * k0, my = act.v0.y + (act.m0[1] - r.top - r.height / 2) * k0;
-      view.w = clamp(act.v0.w / f, 1.5, 90); const k1 = view.w / r.width, m1 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; view.x = mx - (m1[0] - r.left - r.width / 2) * k1; view.y = my - (m1[1] - r.top - r.height / 2) * k1; }
+      view.fitted = false; view.w = clamp(act.v0.w / f, 1.5, 120); const k1 = view.w / r.width, m1 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; view.x = mx - (m1[0] - r.left - r.width / 2) * k1; view.y = my - (m1[1] - r.top - r.height / 2) * k1; }
     scheduleRender(); return;
   }
   const m = mmAt(e.clientX, e.clientY);
-  if (act.kind === 'pan') { const k = act.v0.w / sRect().width; view.x = act.v0.x - (e.clientX - act.c0[0]) * k; view.y = act.v0.y - (e.clientY - act.c0[1]) * k; scheduleRender(); }
+  if (act.kind === 'pan') { view.fitted = false; const k = act.v0.w / sRect().width; view.x = act.v0.x - (e.clientX - act.c0[0]) * k; view.y = act.v0.y - (e.clientY - act.c0[1]) * k; scheduleRender(); }
   else if (act.kind === 'move') { const dx = m[0] - act.m0[0], dy = m[1] - act.m0[1]; if (!act.moved && Math.hypot(dx, dy) * pxmm() < 5) return; act.moved = true;
     const o = byId(act.o0.id), c0 = getC(act.o0); if (c0) { Object.assign(o, JSON.parse(JSON.stringify(act.o0))); setC(o, snapC([c0[0] + dx, c0[1] + dy])); } scheduleRender(); }
   else if (act.kind === 'draw') { shapeDrag(act.o, act.p0, act.o.t === 'line' ? snapPt(m, act.o) : m); scheduleRender(); }
@@ -600,7 +601,7 @@ const endPtr = e => {
   scheduleRender();
 };
 svg.addEventListener('pointerup', endPtr); svg.addEventListener('pointercancel', endPtr);
-svg.addEventListener('wheel', e => { e.preventDefault(); const m = mmAt(e.clientX, e.clientY), f = Math.exp(e.deltaY * 0.0015); view.w = clamp(view.w * f, 1.5, 90); const m2 = mmAt(e.clientX, e.clientY); view.x += m[0] - m2[0]; view.y += m[1] - m2[1]; scheduleRender(); }, {passive:false});
+svg.addEventListener('wheel', e => { e.preventDefault(); view.fitted = false; const m = mmAt(e.clientX, e.clientY), f = Math.exp(e.deltaY * 0.0015); view.w = clamp(view.w * f, 1.5, 120); const m2 = mmAt(e.clientX, e.clientY); view.x += m[0] - m2[0]; view.y += m[1] - m2[1]; scheduleRender(); }, {passive:false});
 function newShape(t, p) {
   if (t === 'circ') return {t:'circle', cx:p[0], cy:p[1], r:0.01, ...BASE};
   if (t === 'ell') return {t:'ell', cx:p[0], cy:p[1], rx:0.01, ry:0.01, rot:0, ...BASE};
@@ -770,53 +771,108 @@ const ICO = {
   text:'<path d="M5 5h14M12 5v14M9 19h6"/>', icon:'<path d="m12 3 2.7 5.6 6.1.8-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.8z"/>', img:'<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="m3 16 5-5 4 4 3-3 6 6"/><circle cx="16.5" cy="9" r="1.5"/>',
   mk:'<circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5 19 19M5 19l2.5-2.5M16.5 7.5 19 5"/>', ring:'<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="5.5"/><path d="M12 2.5v3M21.5 12h-3M12 21.5v-3M2.5 12h3"/>'
 };
-const TOOLS = [['sel', 'Select'], ['circ', 'Circle'], ['ell', 'Ellipse'], ['sq', 'Square'], ['rect', 'Rect'], ['line', 'Line'], ['spl', 'Spline'], ['close', 'Close'], ['fill', 'Fill'], ['text', 'Text'], ['icon', 'Icon'], ['img', 'Logo'], ['mk', 'Indices'], ['ring', 'Rings']];
-$('#tools').append(...TOOLS.map(([k, l]) => h('button', {type:'button', 'data-k':k, 'aria-pressed':'false', html:null, onclick:() => toolClick(k)}, (() => { const s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.innerHTML = ICO[k]; return s; })(), l)));
-function setTool(k) { tool = k; if (k !== 'spl') { spl = []; $('#splBar').hidden = true; } document.querySelectorAll('#tools button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.k === tool))); scheduleRender(); }
+const TOOLS = [['text', 'Text'], ['icon', 'Icon'], ['img', 'Logo'], ['mk', 'Indices'], ['circ', 'Circle'], ['ell', 'Ellipse'], ['sq', 'Square'], ['rect', 'Rectangle'], ['line', 'Line'], ['spl', 'Spline'], ['close', 'Close shape'], ['fill', 'Fill / outline']];
+const TL = Object.fromEntries(TOOLS);
+const icoEl = k => { const s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.innerHTML = ICO[k]; return s; };
+let sheetMode = 'half', sheetBefore = null;
+function setTool(k) {
+  const from = tool; tool = k; if (k !== 'spl') { spl = []; $('#splBar').hidden = true; }
+  if (k !== 'sel') { sel = null; if (from === 'sel') sheetBefore = sheetMode; sheetTo('peek', false); }
+  else if (from !== 'sel' && sheetBefore) { sheetTo(sheetBefore, false); sheetBefore = null; }
+  renderPanel(); scheduleRender();
+}
 function toolClick(k) {
-  if (k === 'mk') { const o = add(mkPreset()); const st = stackOf('main'), prev = st[st.indexOf(o) - 1]; o.r = prev ? +(prev.mode === 'furn' ? prev.r : prev.r - ringWidth(prev) - doc.gap).toFixed(4) : stackStart('main'); commit(); setTool('sel'); select(o.id); return; }
-  if (k === 'ring') { setTool('sel'); tab = 'rings'; renderPanel(); $('.panel').scrollIntoView({behavior:'smooth', block:'start'}); return; }
+  if (k === 'mk') { const o = add(mkPreset()); const st = stackOf('main'), prev = st[st.indexOf(o) - 1]; o.r = prev ? +(prev.mode === 'furn' ? prev.r : prev.r - ringWidth(prev) - doc.gap).toFixed(4) : stackStart('main'); commit(); select(o.id); return; }
   setTool(k);
 }
-function select(id) { sel = id; if (id != null) tab = 'obj'; renderPanel(); scheduleRender(); }
+function select(id) {
+  const was = sel; sel = id;
+  if (id != null && id !== was) { etab = step === 'finish' ? 'fin' : 'edit'; if (sheetMode === 'peek' && !ptr.size) sheetTo('half', false); }
+  renderPanel(); scheduleRender();
+}
 let tt = 0; function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2600); }
+/* steps */
+const STEPS = [['setup', 'Movement'], ['rings', 'Rings'], ['add', 'Add'], ['finish', 'Finish'], ['check', 'Check'], ['order', 'Order']];
+const stepList = () => T().panel ? STEPS.filter(s => s[0] !== 'rings').map(s => s[0] === 'setup' ? ['setup', 'Size'] : s) : STEPS;
+let chk = {n:null, list:[], ms:0, dirty:true}, thinOn = false, bgT = 0;
+const chkVendor = () => { const vs = vendorsFor(); return vs.find(v => v.id === proj.chkV) || vs[0] || null; };
+function runCheck() { const t0 = performance.now(); let list = []; try { list = preflight(chkVendor()); } catch (e) { console.error(e); } chk = {n:list.length, list, ms:performance.now() - t0, dirty:false}; drawSteps(); return list; }
+function bgCheckSoon() { chk.dirty = true; clearTimeout(bgT); if (chk.ms > 300) return; bgT = setTimeout(() => { if (!doc) return; runCheck(); if (step === 'check' && sel == null && tool === 'sel') renderPanel(); }, 1400); }
+function goStep(k) { step = k; sel = null; if (tool !== 'sel') { tool = 'sel'; spl = []; $('#splBar').hidden = true; } thinOn = false; renderPanel(); scheduleRender(); }
+function drawSteps() {
+  const L = stepList();
+  $('#steps').replaceChildren(...L.map(([k, l], i) => h('button', {type:'button', 'aria-current':step === k && sel == null ? 'step' : null, onclick:() => goStep(k)}, h('b', {}, String(i + 1)), h('span', {}, l),
+    k === 'check' && chk.n != null ? h('i', {class:'bdg' + (chk.n ? '' : ' ok'), 'aria-label':chk.n ? chk.n + ' to check' : 'No problems'}, chk.n ? String(chk.n) : '✓') : null)));
+}
+/* bottom sheet */
+function sheetPx(m) {
+  const app = $('#app'), vh = app.clientHeight, top = $('#stage').getBoundingClientRect().top - app.getBoundingClientRect().top, full = Math.max(200, vh - top - 96), peek = Math.min(150, full);
+  return m === 'peek' ? peek : m === 'full' ? full : clamp(Math.round(vh * 0.47), Math.min(280, full), full);
+}
+function sheetTo(m, save = true) { sheetMode = m; $('#panel').style.setProperty('--sheet-h', sheetPx(m) + 'px'); if (save) try { localStorage.setItem('db.sheet', m); } catch (e) {} }
+(() => { const P = $('#panel'); let d = null;
+  const down = e => { if (e.target.closest('button,input,select,a') || matchMedia('(min-width:960px)').matches) return; d = {y:e.clientY, h:P.getBoundingClientRect().height, moved:false}; P.classList.add('drag'); e.currentTarget.setPointerCapture(e.pointerId); };
+  const move = e => { if (!d) return; const dy = e.clientY - d.y; if (Math.abs(dy) > 6) d.moved = true; if (d.moved) P.style.setProperty('--sheet-h', clamp(d.h - dy, sheetPx('peek'), sheetPx('full')) + 'px'); };
+  const up = () => { if (!d) return; P.classList.remove('drag'); const hN = P.getBoundingClientRect().height, moved = d.moved; d = null;
+    if (!moved) { sheetTo(sheetMode === 'peek' ? 'half' : sheetMode === 'half' ? 'full' : 'half'); return; }
+    sheetTo(['peek', 'half', 'full'].map(m => [m, Math.abs(sheetPx(m) - hN)]).sort((a, b) => a[1] - b[1])[0][0]); };
+  for (const el of [$('#grab'), $('#phead')]) { el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); }
+})();
+window.addEventListener('resize', () => sheetTo(sheetMode, false));
 function syncChrome() {
-  $('#mvChip').textContent = T().panel ? doc.name : (T().short ? `${T().mv} · ${T().short}` : T().mv);
+  $('#mvChip').textContent = doc.name || 'Untitled';
   document.querySelectorAll('#unitSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.u === doc.units)));
   const gb = $('#gBtn'); gb.textContent = gmode === 'obj' ? 'OBJ' : 'VIEW'; gb.setAttribute('aria-label', gmode === 'obj' ? 'Two-finger gestures transform the selection' : 'Two-finger gestures zoom the view');
+  $('#handB').hidden = !!T().panel; $('#handB').setAttribute('aria-pressed', String(prevOn()));
+  drawSteps();
 }
 $('#unitSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; doc.units = b.dataset.u; commit(); syncChrome(); renderPanel(); scheduleRender(); });
-$('#mvChip').onclick = () => { tab = 'tpl'; renderPanel(); $('.panel').scrollIntoView({behavior:'smooth', block:'start'}); };
+$('#mvChip').onclick = () => openDesigns();
+$('#moreB').onclick = () => openMore();
 $('#undoB').onclick = undo; $('#redoB').onclick = redo;
-$('#zIn').onclick = () => { view.w = clamp(view.w / 1.4, 1.5, 90); scheduleRender(); };
-$('#zOut').onclick = () => { view.w = clamp(view.w * 1.4, 1.5, 90); scheduleRender(); };
+$('#zIn').onclick = () => { view.w = clamp(view.w / 1.4, 1.5, 120); view.fitted = false; scheduleRender(); };
+$('#zOut').onclick = () => { view.w = clamp(view.w * 1.4, 1.5, 120); view.fitted = false; scheduleRender(); };
 $('#zFit').onclick = fit;
 $('#lumeB').onclick = () => { view.lume = !view.lume; $('#lumeB').setAttribute('aria-pressed', String(view.lume)); gkeyLast = ''; scheduleRender(); toast(view.lume ? 'Lume view: only lumed parts glow' : 'Daylight view'); };
-$('#bigB').onclick = () => { const s = $('#stage'), on = !s.classList.contains('big'); s.classList.toggle('big', on); $('#bigB').setAttribute('aria-pressed', String(on)); try { localStorage.setItem('db.big', on ? '1' : ''); } catch (e) {} setTimeout(() => { fit(); }, 230); };
-try { if (localStorage.getItem('db.big')) { $('#stage').classList.add('big'); $('#bigB').setAttribute('aria-pressed', 'true'); } } catch (e) {}
+$('#handB').onclick = () => togglePrev();
 $('#gBtn').onclick = () => { gmode = gmode === 'obj' ? 'view' : 'obj'; syncChrome(); toast(gmode === 'obj' ? 'Two fingers scale and rotate the selected shape' : 'Two fingers zoom and pan the view'); };
-$('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; renderPanel(); });
-const tabFns = () => ({obj:pObj, rings:pRings, layers:pLayers, tpl:pTpl, order:pOrder});
-$('#expB').onclick = openExport; $('#sendB').onclick = () => openSend();
 document.addEventListener('keydown', e => {
   if (e.target.matches('input,select,textarea')) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if ((e.key === 'Delete' || e.key === 'Backspace') && selObj()) { delObj(selObj()); }
-  else if (e.key === 'Escape') { setTool('sel'); select(null); }
+  else if (e.key === 'Escape') { if (tool !== 'sel') setTool('sel'); else select(null); }
 });
-new ResizeObserver(() => scheduleRender()).observe($('#stage'));
+new ResizeObserver(() => { if (view.fitted) fit(); else scheduleRender(); }).observe($('#stage'));
 
 /* ================= UI: inspector ================= */
-const pb = $('#pb'); let fields = [];
+const pb = $('#pb'); let fields = [], pbKey = '', secHost = null;
+const head = (title, sub) => $('#phead').replaceChildren(...[h('h2', {id:'pTitle'}, title), sub ? h('small', {}, sub) : null].filter(Boolean));
+const foot = (...b) => $('#pfoot').replaceChildren(...b.filter(Boolean));
+const fbtn = (label, fn, cls = '') => h('button', {type:'button', class:'btn ' + cls, onclick:fn}, label);
+const STEPFN = () => ({setup:pSetup, rings:pRingsStep, add:pAdd, finish:pFinish, check:pCheck, order:pOrderStep});
 function renderPanel() {
-  if (!doc) return;
-  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === tab)));
-  fields = []; pb.replaceChildren(); tabFns()[tab]();
+  if (!doc || !proj) return;
+  const o = selObj(), key = tool !== 'sel' ? 't' + tool : o ? 'e' + o.id + etab : 's' + step + proj.cur;
+  const st = key === pbKey ? pb.scrollTop : 0; pbKey = key;
+  fields = []; secHost = null; pb.replaceChildren(); $('#etabs').hidden = true; $('#phead').replaceChildren(); $('#pfoot').replaceChildren();
+  if (tool !== 'sel') pTool(); else if (o) pEdit(o); else { if (!stepList().some(s => s[0] === step)) step = 'setup'; STEPFN()[step](); }
+  drawSteps(); pb.scrollTop = st;
 }
+function stepFoot() {
+  const L = stepList(), i = L.findIndex(s => s[0] === step), prev = L[i - 1], next = L[i + 1];
+  foot(prev ? fbtn('← ' + prev[1], () => goStep(prev[0])) : null, next ? fbtn(next[1] + ' →', () => goStep(next[0]), 'primary') : fbtn('Send to vendor…', () => openSend(), 'primary'));
+}
+const openFolds = new Set();
+function fold(id, title, summary, fn) {
+  const d = h('details', {class:'fold', open:openFolds.has(id) ? true : null}, h('summary', {}, title, summary ? h('em', {}, summary) : null));
+  d.addEventListener('toggle', () => { d.open ? openFolds.add(id) : openFolds.delete(id); });
+  (secHost || pb).append(d); const keep = secHost; secHost = d; try { fn(); } finally { secHost = keep; } return d;
+}
+function inHost(el, fn) { const keep = secHost; secHost = el; try { fn(); } finally { secHost = keep; } }
 function renderPanelSoft() { const a = document.activeElement; if (a && pb.contains(a) && a.matches('input[type=text]')) return; renderPanel(); }
 function syncFields() { for (const f of fields) f(); }
 const slug = s => 'f_' + String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_');
-const secEl = (title, ...kids) => { const d = h('section', {class:'sec'}, title ? h('h3', {}, title) : null, ...kids); pb.append(d); return d; };
+const secEl = (title, ...kids) => { const d = h('section', {class:'sec'}, title ? h('h3', {}, title) : null, ...kids); (secHost || pb).append(d); return d; };
 function row(label, ctl, unit = '') { if (ctl.id === '' || !ctl.id) ctl.id = slug(label); return h('label', {class:'row', for:ctl.id}, h('span', {}, label), ctl._wrap || ctl, h('span', {class:'un'}, unit)); }
 function num(get, set, k = 'L', o = {}) {
   const fmt = v => v == null || !isFinite(v) ? '' : k === 'L' ? fmtL(v) : k === 'A' ? (+v).toFixed(2) : k === 'I' ? String(Math.round(v)) : String(+(+v).toFixed(3));
@@ -859,11 +915,7 @@ function colorCtl(o) {
   d.append(pick); return d;
 }
 const lumeNames = () => [...new Set(doc.objs.filter(o => !o.hid && o.lume && LUME[o.lume]).map(o => LUME[o.lume].n))].join(', ');
-function pObj() {
-  const o = selObj();
-  if (!o) { pb.append(h('div', {class:'empty'}, h('p', {}, h('b', {}, 'Nothing selected.')), h('p', {class:'muted'}, 'Tap a shape on the dial to edit it, or pick a tool and draw. Rings and indices are in the Rings tab; designs, movement and guide layers are in Design; ordering is in Order.'))); return; }
-  pb.append(h('div', {class:'ohead'}, h('h2', {}, o.name || TN[o.t]),
-    h('button', {type:'button', class:'mini', onclick:() => dupObj(o)}, 'Duplicate'), h('button', {type:'button', class:'mini warn', onclick:() => delObj(o)}, 'Delete')));
+function eEdit(o) {
   const S = secEl;
   switch (o.t) {
     case 'circle': S('Circle', row('Diameter', num(() => o.r * 2, v => o.r = Math.max(0.001, v / 2)), UL())); break;
@@ -912,6 +964,8 @@ function pObj() {
         o.k === 'mil' || o.k === 'h24' ? row('Top label', choose(() => o.z24, v => o.z24 = v, [['24', '24'], ['00', '00'], ['0', '0']])) : null]));
       break; }
   }
+}
+function ePos(o) {
   const c = getC(o);
   if (c) { const g = () => getC(o), st = p => setC(o, p);
     secEl('Position', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'From the dial center. Y is up, angle is clockwise from 12.'),
@@ -919,6 +973,8 @@ function pObj() {
       row('Radius', num(() => Math.hypot(...g()), v => st(pol(Math.max(0, v), angOf(g())))), UL()), row('Angle', num(() => angOf(g()), v => st(pol(Math.hypot(...g()), v)), 'A'), '°'),
       ['ell', 'rect', 'icon', 'img'].includes(o.t) || (o.t === 'text' && !o.curve) ? N(o, 'Rotation', 'rot', 'A') : null);
   }
+}
+function eFin(o) {
   const open = o.t === 'line' || (o.t === 'spl' && !o.closed);
   secEl('Engrave', open ? null : row('Mode', seg(() => o.fill !== false, v => o.fill = v, [[true, 'Fill'], [false, 'Outline']])),
     open || o.fill === false ? N(o, 'Line width', 'sw', 'L', {min:0}) : null,
@@ -931,6 +987,15 @@ function pObj() {
     o.t === 'ring' ? null : h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Furniture rings stop short of exclusion zones. Hour indices are always exclusion zones.'));
   secEl('Bevel', N(o, 'Bevel width', 'bw', 'L', {min:0}), N(o, 'Steps', 'bs', 'I', {min:1, max:12}), row('Profile', seg(() => o.bp, v => o.bp = v, [['flat', 'Flat'], ['round', 'Rounded']])),
     h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Each step is an inset copy of the engraved area on its own layer. Run one extra pass per step to cut the edge down in stages.'));
+}
+function eLay(o) {
+  secEl('Layer', row('Name', txt(() => o.name || '', v => { o.name = v || undefined; head(o.name || TN[o.t], o.name ? TN[o.t] : null); })),
+    row('Visible', tog(() => !o.hid, v => o.hid = !v)), row('Locked', tog(() => !!o.lk, v => o.lk = v)),
+    h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Locked elements can still be tapped and edited here, but not dragged on the dial.'));
+  if (o.t === 'ring' || o.t === 'mk') { const st = stackOf(o.ctr || 'main'), i = st.indexOf(o);
+    secEl('Ring order', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Layer ${i + 1} of ${st.length}, counting from the outer edge.`),
+      h('div', {class:'chips'}, h('button', {type:'button', class:'mini', disabled:i <= 0 ? true : null, onclick:() => stackMove(o, -1)}, '▲ Move outward'), h('button', {type:'button', class:'mini', disabled:i >= st.length - 1 ? true : null, onclick:() => stackMove(o, 1)}, '▼ Move inward'))); }
+  else secEl('Stacking', h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => moveZ(o, 1)}, '▲ Bring forward'), h('button', {type:'button', class:'mini', onclick:() => moveZ(o, -1)}, '▼ Send backward')));
 }
 function pRings() {
   const t = T(), ctrs = ['main', ...(t.subs ? Object.keys(t.subs) : [])];
@@ -949,17 +1014,6 @@ function pRings() {
     row('Gap between layers', num(() => doc.gap, v => doc.gap = Math.max(0, v)), UL()), row('Chapter-ring margin', num(() => doc.safe, v => doc.safe = Math.max(0, v), 'L', {re:true}), UL()));
   if (orphans.length) secEl('Not on this movement', h('p', {class:'muted', style:'margin:0'}, `${orphans.length} subdial layer(s) belong to the VK67 template. They are drawn at the dial center until you switch back or change their center.`));
 }
-function pLayers() {
-  if (!doc.objs.length) { pb.append(h('p', {class:'muted'}, 'No shapes yet.')); return; }
-  const rows = doc.objs.slice().reverse().map(o => h('div', {class:'li' + (o.id === sel ? ' on' : '')},
-    h('button', {type:'button', class:'nm', onclick:() => select(o.id)}, o.name || TN[o.t], h('small', {}, o.t === 'text' ? `“${(o.s || '').slice(0, 14)}”` : o.t === 'ring' ? KN[o.k] : o.t === 'icon' ? o.name : '')),
-    h('button', {type:'button', class:'sq', 'aria-label':'Visible', 'aria-pressed':String(!o.hid), onclick:() => { o.hid = !o.hid; commit(); renderPanel(); scheduleRender(); }}, '◉'),
-    h('button', {type:'button', class:'sq', 'aria-label':'Locked', 'aria-pressed':String(!!o.lk), onclick:() => { o.lk = !o.lk; commit(); renderPanel(); }}, '🔒︎'),
-    h('button', {type:'button', class:'sq', 'aria-label':'Bring forward', onclick:() => moveZ(o, 1)}, '▲'),
-    h('button', {type:'button', class:'sq', 'aria-label':'Send backward', onclick:() => moveZ(o, -1)}, '▼')));
-  secEl('Layers, top first', h('div', {class:'list'}, rows));
-  const o = selObj(); if (o) secEl('Selected layer', row('Name', txt(() => o.name || '', v => o.name = v || undefined)));
-}
 const PANELS = {pouch:{name:'Leather pouch flap', w:101.6, h:76.2, cr:6.35, shape:'rect', mat:'Veg-tan leather', look:{dial:'#7a4a2c', ink:'#2a170c'}},
   box:{name:'Wood box lid', w:203.2, h:101.6, cr:3.175, shape:'rect', mat:'Hardwood', look:{dial:'#c9a06d', ink:'#3b2414'}},
   custom:{name:'Custom panel', w:76.2, h:76.2, cr:0, shape:'rect', mat:'', look:{dial:'#d8d4cc', ink:'#1d232b'}}};
@@ -969,31 +1023,105 @@ function newDesign(kind) {
   else if (kind === 'test') d = testCardDoc();
   else if (kind === 'lumetest') d = lumeTestCardDoc();
   else { const P = PANELS[kind]; d = blankDoc('NH36-3H'); Object.assign(d, {kind:'panel', name:P.name, panel:{w:P.w, h:P.h, cr:P.cr, shape:P.shape, mat:P.mat}, safe:3.175, look:{...P.look}}); d.guides.safe = 1; }
-  d.units = doc ? doc.units : 'in'; proj.designs.push(d); switchDesign(proj.designs.length - 1);
+  d.units = doc ? doc.units : 'in'; proj.designs.push(d); step = 'setup'; switchDesign(proj.designs.length - 1);
 }
-function switchDesign(i) { proj.cur = clamp(i, 0, proj.designs.length - 1); doc = proj.designs[proj.cur]; hist = []; fut = []; last = JSON.stringify(doc); sel = null; GC.clear(); gkeyLast = ''; registerUserFonts(); updUndo(); syncChrome(); renderPanel(); fit(); persist(); }
-let installEvt = null; window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (tab === 'tpl') renderPanel(); });
-function pTpl() {
+function switchDesign(i) { proj.cur = clamp(i, 0, proj.designs.length - 1); doc = proj.designs[proj.cur]; hist = []; fut = []; last = JSON.stringify(doc); sel = null; GC.clear(); gkeyLast = ''; prevKey = ''; chk = {n:null, list:[], ms:0, dirty:true}; tool = 'sel'; registerUserFonts(); updUndo(); syncChrome(); renderPanel(); fit(); persist(); }
+let installEvt = null; window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+function pTool() {
+  head(TL[tool] || 'Draw', ['text', 'icon', 'img'].includes(tool) ? 'Place' : 'Draw');
+  pb.append(h('p', {class:'lead'}, HINT[tool] || ''));
+  foot(fbtn('Cancel', () => setTool('sel')));
+}
+function pEdit(o) {
+  head(o.name || TN[o.t], o.name ? TN[o.t] : null);
+  const tabs = [['edit', 'Edit'], getC(o) ? ['pos', 'Position'] : null, ['fin', 'Finish'], ['lay', 'Layer']].filter(Boolean);
+  if (!tabs.some(t => t[0] === etab)) etab = 'edit';
+  const et = $('#etabs'); et.hidden = false;
+  et.replaceChildren(h('div', {class:'seg', role:'tablist'}, ...tabs.map(([k, l]) => h('button', {type:'button', role:'tab', 'aria-pressed':String(etab === k), onclick:() => { etab = k; renderPanel(); }}, l))));
+  ({edit:eEdit, pos:ePos, fin:eFin, lay:eLay})[etab](o);
+  foot(fbtn('Delete', () => delObj(o), 'warn'), fbtn('Duplicate', () => dupObj(o)), fbtn('Done', () => select(null), 'primary'));
+}
+function pRingsStep() {
+  head('Rings and indices');
+  pb.append(h('p', {class:'lead'}, 'Build the dial from the outside in. Tap a ring to edit it.'));
+  pRings(); stepFoot();
+}
+function pAdd() {
+  const t = T(); head(t.panel ? 'Add to the panel' : 'Add to the dial');
+  const tile = k => h('button', {type:'button', class:'tile', onclick:() => toolClick(k)}, icoEl(k), TL[k]);
+  secEl(null, h('div', {class:'tiles'}, ...(t.panel ? ['text', 'icon', 'img'] : ['text', 'icon', 'img', 'mk']).map(tile)));
+  secEl('Shapes', h('div', {class:'tiles'}, ...['circ', 'ell', 'sq', 'rect', 'line', 'spl', 'close', 'fill'].map(tile)));
+  elementsList(); stepFoot();
+}
+function elementsList() {
+  if (!doc.objs.length) { secEl('On this design', h('p', {class:'muted', style:'margin:0'}, 'Nothing yet. Tap a tile above, then tap the dial.')); return; }
+  const rows = doc.objs.slice().reverse().map(o => h('div', {class:'li'},
+    h('button', {type:'button', class:'nm', onclick:() => select(o.id)}, o.name || TN[o.t], h('small', {}, o.t === 'text' ? `“${(o.s || '').slice(0, 14)}”` : o.t === 'ring' ? KN[o.k] : o.t === 'icon' ? o.name : '')),
+    h('button', {type:'button', class:'sq', 'aria-label':'Visible', 'aria-pressed':String(!o.hid), onclick:() => { o.hid = !o.hid; commit(); renderPanel(); scheduleRender(); }}, '◉'),
+    h('button', {type:'button', class:'sq', 'aria-label':'Locked', 'aria-pressed':String(!!o.lk), onclick:() => { o.lk = !o.lk; commit(); renderPanel(); }}, '🔒︎')));
+  secEl('On this design, top first', h('div', {class:'list'}, rows));
+}
+const lumeShort = k => ({C3:'C3', BGW9:'BGW9', OR:'Vintage'})[k] || k;
+function finTags(o) {
+  const t = [];
+  if (o.lume && LUME[o.lume]) t.push(h('span', {class:'tag lu'}, 'Lume ' + lumeShort(o.lume)));
+  if (o.pf && !o.lume) t.push(h('span', {class:'tag pa'}, 'Paint'));
+  if (o.bw > 0) t.push(h('span', {class:'tag'}, 'Bevel'));
+  const open = o.t === 'line' || (o.t === 'spl' && !o.closed);
+  t.push(h('span', {class:'tag'}, open || o.fill === false ? (o.sw > 0 ? 'Line' : 'Hairline') : 'Engrave'));
+  return t;
+}
+function pFinish() {
+  const t = T(); head(t.panel ? 'Color and paint' : 'Color, lume and paint');
+  const objs = doc.objs.filter(o => !o.hid);
+  secEl(null, h('p', {class:'lead'}, 'Tap an element to set its color, lume, paint fill or bevel.'),
+    objs.length ? h('div', {class:'list'}, objs.slice().reverse().map(o => h('div', {class:'li'},
+      h('span', {class:'dot', style:`background:${o.lume && LUME[o.lume] ? LUME[o.lume].day : o.col || doc.look.ink}`}),
+      h('button', {type:'button', class:'nm wrap', onclick:() => { etab = 'fin'; select(o.id); etab = 'fin'; renderPanel(); }}, o.name || TN[o.t], h('div', {class:'tags'}, ...finTags(o)))))) : h('p', {class:'muted', style:'margin:0'}, 'Nothing to finish yet. Add elements first.'));
+  if (!t.panel) previewSection();
+  if (!t.panel) { const c = lumeCfg(); fold('lume', 'Lume rules', `${lumedObjs().length} lumed · ${isSandwich() ? 'sandwich' : 'pockets'}`, lumeSection); }
+  fold('paint', 'Paint fill rules', `${paintObjs().length} painted · ${fmtL(paintCfg().depth)} ${UL()} deep`, paintSection);
+  stepFoot();
+}
+function pCheck() {
+  const t = T(); head('Check before ordering');
+  if (chk.dirty || chk.n == null) runCheck();
+  const vs = vendorsFor(), v = chkVendor();
+  secEl(null, vs.length ? row('Check for', choose(() => v ? v.id : '', id => { proj.chkV = id; persist(); runCheck(); }, vs.map(x => [x.id, x.name]))) : h('p', {class:'muted', style:'margin:0'}, 'Add a vendor in Order to check against its limits.'),
+    v ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Uses ${v.name}’s smallest line and text sizes${v.assumed ? ' (assumed until your test card comes back)' : ''}. Red on the dial marks the spots.`) : null,
+    issueList(chk.list), h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => { runCheck(); renderPanel(); }}, 'Check again')));
+  secEl('Proof', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Page 2 prints the design at actual size. Print at 100% to hold it up to a real dial.'),
+    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => download(fname('pdf'), new Blob([jobSheetPDF(buildLayers(), v)], {type:'application/pdf'}))}, 'Job sheet PDF (1:1 proof)')));
+  if (!t.panel) secEl('Test first', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Send a test card to a new shop before the real dial. It shows their smallest clean line, text and lume pocket.'),
+    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => newDesign('test')}, '+ Shop test card'), h('button', {type:'button', class:'mini', onclick:() => newDesign('lumetest')}, '+ Lume test card')));
+  stepFoot();
+}
+function pOrderStep() { head('Send to a vendor'); pOrder(); stepFoot(); }
+const MVD = {NH34:'GMT, date', NH35:'Date', NH36:'Day and date', NH37:'Date, small 24-hour', NH38:'No date, open heart', VK67:'Chronograph, date'};
+function pSetup() {
   const t = T();
-  const dRow = (d, i) => h('div', {class:'li' + (i === proj.cur ? ' on' : '')},
-      h('button', {type:'button', class:'nm', onclick:() => switchDesign(i)}, d.name, h('small', {}, d.kind === 'panel' ? `${fmtL(d.panel.w)} × ${fmtL(d.panel.h)}` : (TPL[d.tpl] || {}).mv)),
-      h('button', {type:'button', class:'sq', 'aria-label':'Duplicate design', onclick:() => { const c = JSON.parse(JSON.stringify(d)); c.name = d.name + ' copy'; proj.designs.push(c); switchDesign(proj.designs.length - 1); }}, '⧉'),
-      proj.designs.length > 1 ? h('button', {type:'button', class:'sq', 'aria-label':'Delete design', onclick:() => { proj.designs.splice(i, 1); switchDesign(Math.min(proj.cur, proj.designs.length - 1)); toast(`Deleted ${d.name}`); }}, '✕') : null);
-  const all = proj.designs.map((d, i) => [d, i]);
-  secEl('Dial designs', h('div', {class:'list'}, all.filter(([d]) => d.kind !== 'panel').map(([d, i]) => dRow(d, i))),
-    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => newDesign('dial')}, '+ Dial'), h('button', {type:'button', class:'mini', onclick:() => newDesign('test')}, '+ Shop test card'), h('button', {type:'button', class:'mini', onclick:() => newDesign('lumetest')}, '+ Lume test card')));
-  secEl('Accessories (pouches, boxes)', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Separate products. Leather and wood live here, never on a dial.'), h('div', {class:'list'}, all.filter(([d]) => d.kind === 'panel').map(([d, i]) => dRow(d, i))),
-    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => newDesign('pouch')}, '+ Leather pouch flap'), h('button', {type:'button', class:'mini', onclick:() => newDesign('box')}, '+ Wood box lid'), h('button', {type:'button', class:'mini', onclick:() => newDesign('custom')}, '+ Custom panel')));
-  secEl(t.panel ? 'This accessory' : 'This dial', row('Name', txt(() => doc.name, v => { doc.name = v; syncChrome(); })));
+  head(t.panel ? 'Size and material' : 'Choose the movement');
+  secEl(null, row('Name', txt(() => doc.name, v => { doc.name = v; syncChrome(); })));
+  const pc = (k, l) => { const el = h('input', {type:'color', value:doc.look[k], 'aria-label':l}); el.addEventListener('input', () => { doc.look[k] = el.value; gkeyLast = ''; scheduleRender(); }); el.addEventListener('change', () => commit()); return row(l, el); };
+  const preset = (d, i, l) => h('button', {type:'button', class:'mini', onclick:() => { doc.look.dial = d; doc.look.ink = i; commit(); renderPanel(); scheduleRender(); }}, h('span', {class:'dot', style:`background:${d};width:18px;height:18px`}), l);
   if (t.panel) {
     const P = doc.panel, rp = () => { gkeyLast = ''; };
     secEl('Panel', row('Width', num(() => P.w, v => { P.w = Math.max(1, v); rp(); }), UL()), row('Height', num(() => P.h, v => { P.h = Math.max(1, v); rp(); }), UL()),
       row('Shape', seg(() => P.shape, v => { P.shape = v; rp(); }, [['rect', 'Rectangle'], ['ellipse', 'Ellipse']])), P.shape === 'rect' ? row('Corner radius', num(() => P.cr || 0, v => { P.cr = Math.max(0, v); rp(); }), UL()) : null,
       row('Material', txt(() => P.mat || '', v => P.mat = v)), row('Edge margin', num(() => doc.safe, v => { doc.safe = Math.max(0, v); rp(); }), UL()),
-      h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Starting sizes are placeholders. Set them to the pouch pattern or box you are using. The outline exports on the Cut layer.'));
-  } else {
-    secEl('Movement', h('div', {class:'cards'}, Object.entries(TPL).map(([k, v]) => h('button', {type:'button', class:'card', 'aria-pressed':String(doc.tpl === k), onclick:() => { doc.tpl = k; commit(); syncChrome(); renderPanel(); fit(); }},
-      h('b', {}, v.mv), h('span', {}, v.lbl), h('small', {}, 'Fits ' + v.fits)))));
+      h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Set these to the pouch pattern or box you are using. The outline exports on the Cut layer.'));
+    secEl('Material color (screen only)', h('div', {class:'chips'}, preset('#7a4a2c', '#2a170c', 'Brown leather'), preset('#1c1a19', '#8a8580', 'Black leather'), preset('#c9a06d', '#3b2414', 'Light wood'), preset('#5a3a24', '#1b0f07', 'Walnut')), pc('dial', 'Material'), pc('ink', 'Engraving'));
+    stepFoot(); return;
+  }
+  const groups = {}; for (const [k, v] of Object.entries(TPL)) (groups[v.mv] = groups[v.mv] || []).push([k, v]);
+  secEl('Movement', h('div', {class:'cards'}, Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0])).map(([mv, list]) => h('button', {type:'button', class:'card', 'aria-pressed':String(t.mv === mv), onclick:() => { if (t.mv !== mv) { doc.tpl = list[0][0]; commit(); syncChrome(); renderPanel(); fit(); } }},
+    h('b', {}, mv), h('span', {}, MVD[mv] || list[0][1].lbl)))));
+  const vars = groups[t.mv] || [];
+  if (vars.length > 1) secEl('Version', row('Window', seg(() => doc.tpl, v => { doc.tpl = v; syncChrome(); setTimeout(fit, 0); }, vars.map(([k, v]) => [k, v.short || v.lbl]))), h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${t.lbl}. Fits ${t.fits}.`));
+  else secEl('Version', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${t.lbl}. Fits ${t.fits}.`));
+  secEl('Dial color (screen only)', h('div', {class:'chips'}, preset('#1c1c1c', '#ececea', 'Black'), preset('#f3f2ef', '#1d1d1c', 'White'), preset('#6c6c6a', '#f2f2f0', 'Gray'), preset('#b9bcbf', '#2f3133', 'Steel'), preset('#1d3f8a', '#eef1f6', 'Blue'), preset('#24443a', '#eef2ee', 'Green')),
+    pc('dial', 'Dial'), pc('ink', 'Engraving'));
+  fold('geo', 'Certified geometry', `Ø ${fmtL(2 * t.R)} ${UL()}`, () => {
     const L = v => `${(v / 25.4).toFixed(4)}" (${v.toFixed(2)})`;
     const rows = [['Dial diameter', `${L(2 * t.R)} ${t.dTol}`], ['Dial thickness', L(t.th) + ' ±0.04'], ['Center hole', L(t.hole) + ' ±0.05']];
     if (t.flats) rows.push(['Crown-side flats', `2 × at 2H and 4H, ${L(t.flatD)} from center`]);
@@ -1002,26 +1130,40 @@ function pTpl() {
     t.feet.forEach((f, i) => rows.push([`Foot ${i + 1}`, `x ${L(f[0])}, y ${L(f[1])}`]));
     rows.push(['Feet', `Ø ${L(t.fd)} × ${L(t.fl)} long`]);
     if (t.subs) { for (const sb of Object.values(t.subs)) rows.push([sb.n, `${L(Math.hypot(sb.x, sb.y))} from center`]); rows.push(['Subdial hand holes', 'Ø ' + L(t.sh)], t.smaxNote ? ['Subdial size', `not set by Seiko; guide shows Ø ${L(t.smax)} as a start`] : ['Largest subdial', 'Ø ' + L(t.smax)]); }
-    secEl('Certified geometry', h('div', {}, h('span', {class:'badge'}, 'From Seiko / TMI drawing')),
+    secEl(null, h('div', {}, h('span', {class:'badge'}, 'From Seiko / TMI drawing')),
       h('div', {style:'overflow-x:auto'}, h('table', {class:'spec'}, h('tbody', {}, rows.map(([a, b]) => h('tr', {}, h('td', {}, a), h('td', {}, b)))))),
       h('p', {class:'src', style:'margin:0'}, `Source: ${t.src}. Inches first, mm in brackets. X right, Y up from dial center.`));
-  }
-  lumeSection(); paintSection();
-  const G = doc.guides, gt = (k, l) => row(l, tog(() => G[k], v => G[k] = v ? 1 : 0));
-  secEl('Guide layers (never exported)', gt('outline', t.panel ? 'Panel outline' : 'Dial outline'), gt('safe', t.panel ? 'Edge margin' : 'Chapter-ring margin'),
-    t.panel ? null : [row('Margin width', num(() => doc.safe, v => doc.safe = Math.max(0, v)), UL()), gt('hole', 'Center hole'), gt('win', 'Windows'), gt('feet', 'Dial feet'), t.subs ? gt('subs', 'Subdials') : null, gt('grid', 'Minute grid'), t.back ? gt('back', 'Back-side flat zones') : null]);
-  const pc = (k, l) => { const el = h('input', {type:'color', value:doc.look[k]}); el.addEventListener('input', () => { doc.look[k] = el.value; scheduleRender(); }); el.addEventListener('change', () => commit()); return row(l, el); };
-  const preset = (d, i, l) => h('button', {type:'button', class:'mini', onclick:() => { doc.look.dial = d; doc.look.ink = i; commit(); renderPanel(); scheduleRender(); }}, l);
-  secEl('Preview colors (screen only)', pc('dial', t.panel ? 'Material' : 'Dial'), pc('ink', 'Engraving'),
-    t.panel ? h('div', {class:'chips'}, preset('#7a4a2c', '#2a170c', 'Brown leather'), preset('#1c1a19', '#8a8580', 'Black leather'), preset('#c9a06d', '#3b2414', 'Light wood'), preset('#5a3a24', '#1b0f07', 'Walnut'))
-      : h('div', {class:'chips'}, preset('#1c1c1c', '#ececea', 'Black'), preset('#f3f2ef', '#1d1d1c', 'White'), preset('#6c6c6a', '#f2f2f0', 'Gray'), preset('#b9bcbf', '#2f3133', 'Steel'), preset('#1d3f8a', '#eef1f6', 'Blue'), preset('#24443a', '#eef2ee', 'Green')));
-  secEl('Editing', row('Snap to minute marks', tog(() => doc.snap, v => doc.snap = v)),
-    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => { doc.objs = []; sel = null; GC.clear(); commit(); renderPanel(); scheduleRender(); toast('Cleared. Undo brings it back.'); }}, 'Clear this design'),
-      t.panel ? null : h('button', {type:'button', class:'mini', onclick:() => { const u = doc.units, nm = doc.name; const keep = proj.designs; sampleDoc(); doc.units = u; doc.name = nm; keep[proj.cur] = doc; proj.designs = keep; sel = null; GC.clear(); commit(); syncChrome(); renderPanel(); fit(); toast('Sample loaded. Undo goes back.'); }}, 'Load sample dial')));
-  const off = h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Fonts you use are saved on this phone automatically. To have all 1,892 ready offline, download the full library once (about 97 MB).');
-  secEl('App', installEvt ? h('button', {type:'button', class:'btn primary', onclick:async () => { installEvt.prompt(); await installEvt.userChoice; installEvt = null; renderPanel(); }}, 'Install Dial Bench on this phone') : null,
-    off, h('button', {type:'button', class:'btn', onclick:e => cacheAllFonts(e.currentTarget)}, 'Download full font library for offline'),
-    h('p', {class:'src', style:'margin:0'}, 'Fonts: Google Fonts (SIL Open Font License / Apache 2.0). Icons: Material Symbols by Google (Apache 2.0).'));
+  });
+  stepFoot();
+}
+function openDesigns() {
+  sheet('Designs', b => inHost(b, () => {
+    const dRow = (d, i) => h('div', {class:'li' + (i === proj.cur ? ' on' : '')},
+      h('button', {type:'button', class:'nm', onclick:() => { closeSheet(); switchDesign(i); }}, d.name, h('small', {}, d.kind === 'panel' ? `${fmtL(d.panel.w)} × ${fmtL(d.panel.h)}` : (TPL[d.tpl] || {}).mv)),
+      h('button', {type:'button', class:'sq', 'aria-label':'Duplicate design', onclick:() => { const c = JSON.parse(JSON.stringify(d)); c.name = d.name + ' copy'; proj.designs.push(c); closeSheet(); switchDesign(proj.designs.length - 1); }}, '⧉'),
+      proj.designs.length > 1 ? h('button', {type:'button', class:'sq', 'aria-label':'Delete design', onclick:() => { proj.designs.splice(i, 1); switchDesign(Math.min(proj.cur, proj.designs.length - 1)); closeSheet(); toast(`Deleted ${d.name}`); }}, '✕') : null);
+    const all = proj.designs.map((d, i) => [d, i]), nd = k => () => { closeSheet(); newDesign(k); };
+    secEl('Dials', h('div', {class:'list'}, all.filter(([d]) => d.kind !== 'panel').map(([d, i]) => dRow(d, i))),
+      h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:nd('dial')}, '+ New dial'), h('button', {type:'button', class:'mini', onclick:nd('test')}, '+ Shop test card'), h('button', {type:'button', class:'mini', onclick:nd('lumetest')}, '+ Lume test card')));
+    secEl('Accessories (pouches, boxes)', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Separate products. Leather and wood live here, never on a dial.'), h('div', {class:'list'}, all.filter(([d]) => d.kind === 'panel').map(([d, i]) => dRow(d, i))),
+      h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:nd('pouch')}, '+ Leather pouch flap'), h('button', {type:'button', class:'mini', onclick:nd('box')}, '+ Wood box lid'), h('button', {type:'button', class:'mini', onclick:nd('custom')}, '+ Custom panel')));
+  }));
+}
+function openMore() {
+  const t = T();
+  sheet('More', b => inHost(b, () => {
+    const G = doc.guides, gt = (k, l) => row(l, tog(() => G[k], v => G[k] = v ? 1 : 0));
+    secEl('Guide layers (never exported)', gt('outline', t.panel ? 'Panel outline' : 'Dial outline'), gt('safe', t.panel ? 'Edge margin' : 'Chapter-ring margin'),
+      t.panel ? null : [row('Margin width', num(() => doc.safe, v => doc.safe = Math.max(0, v)), UL()), gt('hole', 'Center hole'), gt('win', 'Windows'), gt('feet', 'Dial feet'), t.subs ? gt('subs', 'Subdials') : null, gt('grid', 'Minute grid'), t.back ? gt('back', 'Back-side flat zones') : null]);
+    secEl('Editing', row('Snap to minute marks', tog(() => doc.snap, v => doc.snap = v)),
+      h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => { doc.objs = []; sel = null; GC.clear(); commit(); closeSheet(); renderPanel(); scheduleRender(); toast('Cleared. Undo brings it back.'); }}, 'Clear this design'),
+        t.panel ? null : h('button', {type:'button', class:'mini', onclick:() => { const u = doc.units, nm = doc.name; const keep = proj.designs; sampleDoc(); doc.units = u; doc.name = nm; keep[proj.cur] = doc; proj.designs = keep; sel = null; GC.clear(); commit(); closeSheet(); syncChrome(); renderPanel(); fit(); toast('Sample loaded. Undo goes back.'); }}, 'Load sample dial')));
+    secEl('Files', h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => openExport()}, 'Exports and project file…')));
+    const off = h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Fonts you use are saved on this phone automatically. To have all 1,892 ready offline, download the full library once (about 97 MB).');
+    secEl('App', installEvt ? h('button', {type:'button', class:'btn primary', onclick:async () => { installEvt.prompt(); await installEvt.userChoice; installEvt = null; closeSheet(); }}, 'Install Dial Bench on this phone') : null,
+      off, h('button', {type:'button', class:'btn', onclick:e => cacheAllFonts(e.currentTarget)}, 'Download full font library for offline'),
+      h('p', {class:'src', style:'margin:0'}, 'Fonts: Google Fonts (SIL Open Font License / Apache 2.0). Icons: Material Symbols by Google (Apache 2.0). Hands and case in the preview are generic shapes drawn by Dial Bench.'));
+  }));
 }
 async function cacheAllFonts(btn) {
   const n = Math.max(0, ...FONTS.flatMap(f => Object.values(f.files).map(r => r[0]))) + 1; let done = 0; btn.disabled = true;
@@ -1163,7 +1305,7 @@ function preflight(v) {
 function issueList(list) {
   if (!list.length) return h('p', {class:'ok'}, '✓ No problems found for this vendor.');
   return h('div', {class:'list'}, list.map(x => h('div', {class:'li'}, h('span', {class:'pill ' + x.sev}, x.sev === 'err' ? 'Fix' : 'Check'),
-    h('button', {type:'button', class:'nm wrap', onclick:() => { if (x.o) { closeSheet(); tab = 'obj'; select(x.o.id); } }}, x.o ? `${x.o.name || TN[x.o.t]}: ` : '', x.msg))));
+    h('button', {type:'button', class:'nm wrap', onclick:() => { if (x.o) { closeSheet(); etab = 'edit'; select(x.o.id); } }}, x.o ? `${x.o.name || TN[x.o.t]}: ` : '', x.msg))));
 }
 
 /* ================= email + job sheet text ================= */
@@ -1214,7 +1356,7 @@ function emailFor(v, st) {
 
 /* ================= send sheet ================= */
 function openSend(vid) {
-  const okV = vendorsFor(); if (!okV.length) { toast('Add a vendor for this kind of design in the Order tab first.'); return; }
+  const okV = vendorsFor(); if (!okV.length) { toast('Add a vendor for this kind of design in the Order step first.'); return; }
   let v0 = vid || proj.lastVendor || 'salt'; if (!okV.some(x => x.id === v0)) { if (vid) toast(`${vById(vid).name} is set up for ${USES[vById(vid).use].toLowerCase()}, not this design.`); v0 = okV[0].id; }
   const st = {vid:v0, qty:doc.name === 'Shop test card' ? 1 : 5, due:'', supplied:true, job:null, notes:'', edited:false, to:'', subject:'', body:''};
   let issues = [];
@@ -1234,13 +1376,13 @@ function openSend(vid) {
         h('section', {class:'sec'}, h('h3', {}, 'Vendor'),
           row('Vendor', (() => { const s = h('select', {}, vendorsFor().map(x => h('option', {value:x.id}, x.name))); s.value = st.vid; s.onchange = () => { st.vid = s.value; st.job = null; proj.lastVendor = s.value; persist(); re(); }; return s; })()),
           h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${v.where}. ${v.does}`), contactLine(v)),
-        h('section', {class:'sec'}, h('h3', {}, 'Job'), h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Design: ${doc.name}. Switch designs in the Design tab.`),
+        h('section', {class:'sec'}, h('h3', {}, 'Job'), h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Design: ${doc.name}. Switch designs from the name at the top.`),
           row('Work', (() => { const d = h('div', {class:'seg'}); for (const [k, l] of Object.entries(JOBS)) d.append(h('button', {type:'button', 'aria-pressed':String(st.job === k), onclick:() => { st.job = k; re(); }}, l)); return d; })()),
           row('Quantity', qty), row('Due date', due), row('I supply the parts', (() => { const c = h('input', {type:'checkbox'}); c.checked = st.supplied; c.onchange = () => { st.supplied = c.checked; re(); }; return c; })()), row('Notes', notes)),
         h('section', {class:'sec'}, h('h3', {}, `Check · ${errs ? errs + ' to fix' : issues.length ? issues.length + ' to review' : 'ready'}`), issueList(issues)),
         h('section', {class:'sec'}, h('h3', {}, 'Email'), row('To', to), row('Subject', subj), body,
           h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:re}, 'Rebuild email'), h('button', {type:'button', class:'mini', onclick:() => copyText(`${st.subject}\n\n${st.body}`)}, 'Copy email'),
-            (proj.me && proj.me.name) ? null : h('span', {class:'muted', style:'font-size:13px'}, 'Add your name and phone in the Order tab so they sign the email.'))),
+            (proj.me && proj.me.name) ? null : h('span', {class:'muted', style:'font-size:13px'}, 'Add your name and phone in Order → Your contact so they sign the email.'))),
         h('div', {style:'display:grid;gap:8px'},
           h('button', {type:'button', class:'xrow primary', onclick:() => sendShare(v, st)}, h('b', {}, 'Share files + email'), h('small', {}, 'Opens your phone’s share sheet. Pick Gmail and the files are attached.')),
           h('button', {type:'button', class:'xrow', onclick:() => sendMailto(v, st)}, h('b', {}, 'Open email app'), h('small', {}, 'Fills in the email and saves the files so you can attach them')),
@@ -1276,13 +1418,13 @@ async function sendMailto(v, st, files) {
 function askLog(v, st) { toast('Sent? Tap “Log this order” to track it.'); }
 function logOrder(v, st) {
   proj.orders.unshift({id:Date.now(), vendor:v.id, design:doc.name, item:T().panel ? doc.name : 'Watch dials', qty:st.qty, cost:0, sent:today(), recv:'', status:'Quote requested', q:0, notes:''});
-  persist(); tab = 'order'; renderPanel(); toast('Order logged');
+  persist(); goStep('order'); toast('Order logged');
 }
 
 /* ================= order tab ================= */
 function pOrder() {
-  secEl('Send', h('button', {type:'button', class:'btn primary', onclick:() => openSend()}, 'Send to vendor…'),
-    h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Checks “${doc.name}”, builds the files and job sheet, and writes a quote email with the tolerances below.`));
+  secEl(null, h('p', {class:'lead'}, `Send to vendor checks “${doc.name}”, builds the files and job sheet, and writes a quote email with the tolerances below.`),
+    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => openExport()}, 'Files only (download)…')));
   const T_ = proj.tol;
   secEl('Requested tolerances', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Your requests to the shop. Seiko’s own dial tolerances are added to the email automatically.'),
     row('Artwork position', num(() => T_.pos, v => T_.pos = Math.max(0, v), 'L', {after:persist}), '±' + UL()), row('12 o’clock rotation', num(() => T_.rot, v => T_.rot = Math.max(0, v), 'A'), '±°'),
@@ -1466,9 +1608,9 @@ function lumeSection() {
   const t = T(), cfg = lumeCfg(), n = lumedObjs().length, sand = isSandwich();
   const R = (label, k, min) => row(label, num(() => lumeCfg()[k], v => setL(k, Math.max(min, v)), 'L', {after:persist}), UL());
   let status = null;
-  const check = h('button', {type:'button', class:'mini', onclick:() => { pfThin = []; const iss = lumeIssues(); scheduleRender(); status.replaceChildren(issueList(iss)); }}, 'Check lume');
+  const check = h('button', {type:'button', class:'mini', onclick:() => { pfThin = []; thinOn = true; const iss = lumeIssues(); scheduleRender(); status.replaceChildren(issueList(iss)); }}, 'Check lume');
   status = h('div', {});
-  secEl('Lume', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${n} lumed element${n === 1 ? '' : 's'}. Set lume on any element in Object → Engrave.`),
+  secEl('Lume', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${n} lumed element${n === 1 ? '' : 's'}. Tap an element, then Finish → Lume.`),
     t.panel ? null : row('Method', seg(() => cfg.mode, v => setL('mode', v), [['pocket', 'Engraved pockets'], ['sandwich', 'Sandwich']])),
     R('Min lume width', 'minW', 0.05),
     sand ? [R('Top plate thickness', 'top', 0.05), R('Min bridge', 'web', 0.05), R('Lume map overlap', 'overlap', 0),
@@ -1501,13 +1643,140 @@ const paintObjs = () => doc.objs.filter(o => !o.hid && o.pf && !o.lume);
 const paintOf = o => (o.col || doc.look.ink).toLowerCase();
 function paintSection() {
   const c = paintCfg(), n = paintObjs().length, cols = [...new Set(paintObjs().map(paintOf))];
-  secEl('Paint fill', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${n} paint-filled element${n === 1 ? '' : 's'}${cols.length ? ' in ' + cols.length + ' color' + (cols.length > 1 ? 's' : '') : ''}. Turn on Paint fill for an element in Object → Engrave; it fills with that element’s color.`),
+  secEl('Paint fill', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${n} paint-filled element${n === 1 ? '' : 's'}${cols.length ? ' in ' + cols.length + ' color' + (cols.length > 1 ? 's' : '') : ''}. Tap an element, then Finish → Paint fill. It fills with that element’s color.`),
     row('Min pocket depth', num(() => paintCfg().depth, v => setP('depth', Math.max(0.02, v)), 'L', {after:persist}), UL()),
     row('Masking film first', tog(() => paintCfg().mask, v => setP('mask', v))),
     h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'With masking film, the shop lasers through the film and the metal together, so the mask lines up exactly with the pockets. Leave the film on, fill, wipe, then peel.'),
     T().panel ? null : row('Dial painted first', tog(() => paintCfg().base, v => setP('base', v), true)),
     !T().panel && paintCfg().base ? row('Base paint', txt(() => paintCfg().baseName, v => setP('baseName', v))) : null,
     !T().panel && paintCfg().base ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'The laser cuts through the base coat into the metal. Order of work: paint the dial, apply film, engrave, fill, wipe, peel. Lume goes on last.') : null);
+}
+
+/* ================= hands & case preview (screen only, never exported) ================= */
+const HSTY = {sword:{n:'Sword', L:[8.5, 12.5, 12.5]}, pilot:{n:'Pilot', L:[8.5, 12.5, 12.5]}, baton:{n:'Baton', L:[7.5, 12.5, 12.75]},
+  syringe:{n:'Syringe', L:[8.5, 12, 12]}, block:{n:'Block', L:[8, 12, 13]}, dauphine:{n:'Dauphine', L:[8, 12, 12.5]}};
+const HFIN = {silver:['#d6d9dc', '#7c8187'], black:['#202020', '#000000'], gold:['#d2b063', '#8a6a22']};
+const PREVDEF = {on:false, hs:'sword', fin:'silver', lu:'C3', red:false, H:8.5, M:12.5, S:12.5, gmt:true, G:13, time:'10:08:37', cs:'round', lug:20, bez:'dive', crown:3, strap:true};
+const prevCfg = () => { const t = T(), c = {...PREVDEF, ...(doc && doc.prev || {})}; if (c.cd == null) c.cd = Math.max(36, Math.round(2 * t.R + 11)); c.cd = Math.max(c.cd, 2 * t.R + 4); return c; };
+const prevOn = () => !!(doc && doc.prev && doc.prev.on && doc.kind !== 'panel');
+let prevKey = '';
+function setPv(k, v) { doc.prev = {...(doc.prev || {}), [k]:v}; if (k === 'hs') { const L = HSTY[v].L; Object.assign(doc.prev, {H:L[0], M:L[1], S:L[2]}); } prevKey = ''; }
+function togglePrev() { if (T().panel) return; setPv('on', !prevOn()); commit(); syncChrome(); gkeyLast = ''; renderPanel(); fit(); toast(prevOn() ? 'Preview on. Hands and case are never exported.' : 'Preview off'); }
+function prevBounds() { const c = prevCfg(), Rc = c.cd / 2, ltl = c.cd * 1.2; return c.cs === 'none' ? [-Rc, -Rc, Rc, Rc] : [-(Rc + 3.6), -(ltl / 2 + 1), Rc + 3.6, ltl / 2 + 1]; }
+/* geometry helpers: hands point to -y (12 o'clock), pivot at 0,0, mm */
+function clipH(P, keep) { const out = []; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], ia = keep(a), ib = keep(b); if (ia) out.push(a); if (ia !== ib) { const f = keep.y, t = (f - a[1]) / (b[1] - a[1]); out.push([a[0] + t * (b[0] - a[0]), f]); } } return out; }
+const band = (P, y1, y2) => { const k1 = q => q[1] >= y1; k1.y = y1; const k2 = q => q[1] <= y2; k2.y = y2; const r = clipH(clipH(P, k1), k2); return r.length > 2 ? r : null; };
+const inset = (P, d) => P ? OFF([P], -d) : [];
+const ori = p => sArea(p) < 0 ? p.slice().reverse() : p, UU = parts => U(parts.filter(Boolean).map(ori));
+function handGeo(sty, kind, L) {
+  const hr = kind === 'h', rc = hr ? 1.25 : 0.95; let P, lume = [], facet = null;
+  if (sty === 'baton') { const w = hr ? 0.48 : 0.4; P = [[0, -L], [w, -L + 0.3], [w, 1.3], [-w, 1.3], [-w, -L + 0.3]]; lume = inset(band(P, -L + 0.5, -2.4), 0.16); }
+  else if (sty === 'sword' || sty === 'pilot') { const w = hr ? 1.05 : 0.9; P = [[0, -L], [w, -0.58 * L], [0.34, -1.6], [0.34, 1.0], [-0.34, 1.0], [-0.34, -1.6], [-w, -0.58 * L]];
+    lume = sty === 'sword' ? inset(band(P, -L, -2.2), 0.22) : inset(band(P, -L, -0.46 * L), 0.03); }
+  else if (sty === 'syringe') { const s = hr ? 0.2 : 0.17, b = hr ? 0.55 : 0.46, y1 = -0.28 * L, y2 = -0.8 * L;
+    P = [[0, -L], [0.1, -L + 0.6], [0.12, y2], [b, y2 + 0.25], [b, y1], [s, y1 + 0.3], [s, 1.0], [-s, 1.0], [-s, y1 + 0.3], [-b, y1], [-b, y2 + 0.25], [-0.12, y2], [-0.1, -L + 0.6]];
+    lume = inset(band(P, y2 + 0.1, y1 - 0.05), 0.15); }
+  else if (sty === 'block') { const w = hr ? 0.62 : 0.52, tl = 1.5, ym = -(0.5 * L + 0.6);
+    P = [[0, -L], [w, -L + tl], [w, 1.1], [-w, 1.1], [-w, -L + tl]];
+    lume = [...inset(band(P, -L, ym - 0.13), 0.17), ...inset(band(P, ym + 0.13, -2.2), 0.17)]; }
+  else { const w = hr ? 0.95 : 0.8; P = [[0, -L], [w, -1.8], [0.45, 0.9], [-0.45, 0.9], [-w, -1.8]]; facet = [[0, -L], [w, -1.8], [0.45, 0.9], [0, 0.9]];
+    lume = inset(band(P, -0.86 * L, -2.6), w * 0.5); }
+  return {body:UU([P, circ(0, 0, rc)]), lume, facet, pin:circ(0, 0, hr ? 0.7 : 0.45)};
+}
+function secGeo(sty, S) {
+  const T_ = 3.0, needle = [[0, -S], [0.07, -S + 0.5], [0.15, -0.4], [0.2, T_], [-0.2, T_], [-0.15, -0.4], [-0.07, -S + 0.5]], parts = [needle, circ(0, 0, 0.62)]; let lume = [];
+  if (sty === 'block') { parts.push(circ(0, T_ - 0.3, 0.75)); lume = [circ(0, T_ - 0.3, 0.5)]; }
+  else if (sty === 'sword' || sty === 'pilot') { parts.push([[0, 0.6], [0.45, T_ * 0.7], [0, T_ + 0.25], [-0.45, T_ * 0.7]]); if (sty === 'pilot') lume = [band(needle, -S, -0.62 * S)].filter(Boolean); }
+  return {body:UU(parts), lume};
+}
+function gmtGeo(G) { const tri = [[0, -G], [1.05, -G + 2.4], [-1.05, -G + 2.4]]; return {body:UU([tri, [[0.14, -G + 2.3], [0.14, 0.8], [-0.14, 0.8], [-0.14, -G + 2.3]], circ(0, 0, 0.85)]), lume:inset(tri, 0.27)}; }
+const HG = new Map(); const hg = (k, f) => { if (!HG.has(k)) { if (HG.size > 60) HG.clear(); HG.set(k, f()); } return HG.get(k); };
+function handEl(geo, ang, col, edge, lumeC, night, shadow) {
+  const g = sv('g', {transform:`rotate(${ang.toFixed(3)})`, filter:shadow && !night ? 'url(#hsh)' : null});
+  g.append(sv('path', {d:pd(geo.body), fill:night ? '#141414' : col, stroke:night ? '#262626' : edge, 'stroke-width':0.8, 'vector-effect':'non-scaling-stroke', 'fill-rule':'nonzero'}));
+  if (geo.facet && !night) g.append(sv('path', {d:pd([geo.facet]), fill:'#000', 'fill-opacity':0.16}));
+  if (geo.lume && geo.lume.length && lumeC) g.append(sv('path', {d:pd(geo.lume), fill:night ? lumeC.glow : lumeC.day, filter:night ? 'url(#glow)' : null, 'fill-rule':'nonzero'}));
+  if (geo.pin) g.append(sv('path', {d:pd([geo.pin]), fill:night ? '#0a0a0a' : '#3a3a3a'}));
+  return g;
+}
+function parseTime(s) { const m = String(s || '').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/); return m ? [+m[1], +m[2], +(m[3] || 0)] : [10, 8, 37]; }
+function drawPrev() {
+  const on = prevOn(); if (!on) { if (prevKey !== 'off') { gCase.replaceChildren(); gPrev.replaceChildren(); prevKey = 'off'; } return; }
+  const t = T(), c = prevCfg(), night = !!view.lume, k = JSON.stringify([c, t.R, t.mv, night]); if (k === prevKey) return; prevKey = k;
+  drawCase(c, t, night);
+  gPrev.replaceChildren();
+  const [hh, mm, ss] = parseTime(c.time), fin = HFIN[c.fin] || HFIN.silver, lu = c.lu && LUME[c.lu] ? LUME[c.lu] : null;
+  const aH = ((hh % 12) + mm / 60 + ss / 3600) * 30, aM = (mm + ss / 60) * 6, aS = ss * 6;
+  if (t.subs) for (const [sk, s] of Object.entries(t.subs)) {
+    const r = (t.smax || 7) / 2 * 0.8, a = /24/.test(s.n) ? (hh + mm / 60) * 15 : /second/i.test(s.n) ? aS : /12-hour/.test(s.n) ? 0 : 0;
+    const geo = hg('sub' + r, () => ({body:UU([[[0, -r], [0.1, -r + 0.6], [0.16, 0.9], [-0.16, 0.9], [-0.1, -r + 0.6]], circ(0, 0, 0.45)])}));
+    const g = handEl(geo, a, fin[0], fin[1], null, night, true); g.setAttribute('transform', `translate(${s.x} ${-s.y}) rotate(${a.toFixed(2)})`); gPrev.append(g);
+  }
+  if (t.mv === 'NH34' && c.gmt) gPrev.append(handEl(hg('gmt' + c.G, () => gmtGeo(c.G)), (hh + mm / 60) * 15, c.red ? '#c8102e' : fin[0], c.red ? '#7d0a1c' : fin[1], lu, night, true));
+  gPrev.append(handEl(hg(`${c.hs}h${c.H}`, () => handGeo(c.hs, 'h', c.H)), aH, fin[0], fin[1], lu, night, true));
+  gPrev.append(handEl(hg(`${c.hs}m${c.M}`, () => handGeo(c.hs, 'm', c.M)), aM, fin[0], fin[1], lu, night, true));
+  const red = c.red ? ['#c8102e', '#7d0a1c'] : fin;
+  gPrev.append(handEl(hg(`${c.hs}s${c.S}`, () => secGeo(c.hs, c.S)), aS, red[0], red[1], lu, night, true));
+  gPrev.append(sv('circle', {cx:0, cy:0, r:0.3, fill:night ? '#111' : red[0], stroke:night ? '#222' : red[1], 'stroke-width':0.6, 'vector-effect':'non-scaling-stroke'}));
+}
+function caseShape(cs, Rc) {
+  const pts = [];
+  if (cs === 'cushion') { for (let i = 0; i < 180; i++) { const a = i * 2 * D2R, c = Math.cos(a), s = Math.sin(a), n = 4.2; pts.push([Rc * Math.sign(c) * Math.abs(c) ** (2 / n), Rc * Math.sign(s) * Math.abs(s) ** (2 / n)]); } }
+  else if (cs === 'tonneau') { const a = Rc * 0.92, b = Rc * 1.12; for (let i = 0; i < 180; i++) { const t = i * 2 * D2R, c = Math.cos(t), s = Math.sin(t), y = b * Math.sign(s) * Math.abs(s) ** (2 / 3.2); pts.push([a * Math.sign(c) * Math.abs(c) ** (2 / 3.2) * (1 - 0.16 * (y / b) ** 2), y]); } }
+  else return circ(0, 0, Rc);
+  return pts;
+}
+function drawCase(c, t, night) {
+  gCase.replaceChildren(); if (c.cs === 'none') return;
+  const R = t.R, Rc = c.cd / 2, LW = c.lug, ltl = c.cd * 1.2, steel = night ? ['#151515', '#242424'] : ['#c4c7ca', '#8a8f95'], add_ = e => gCase.append(e);
+  const ln = {stroke:steel[1], 'stroke-width':1, 'vector-effect':'non-scaling-stroke'}, hw = c.cs === 'tonneau' ? Rc * 0.92 : Rc;
+  if (c.strap) for (const sy of [-1, 1]) add_(sv('rect', {x:-LW / 2, y:sy > 0 ? ltl / 2 - 4 : -ltl / 2 - 36, width:LW, height:40, rx:1.4, fill:night ? '#0b0b0b' : '#2b2b2b'}));
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) { const y0 = Rc * 0.5, x = sx > 0 ? LW / 2 : -LW / 2 - 2.6; add_(sv('rect', {x, y:sy > 0 ? y0 : -ltl / 2, width:2.6, height:ltl / 2 - y0, rx:1.1, fill:steel[0], ...ln})); }
+  const cr = sv('g', {transform:`rotate(${(c.crown - 3) * 30})`});
+  cr.append(sv('rect', {x:hw - 0.8, y:-1.4, width:1.6, height:2.8, fill:steel[0], ...ln}), sv('rect', {x:hw + 0.5, y:-3, width:2.8, height:6, rx:0.8, fill:steel[0], ...ln}));
+  for (let i = -5; i <= 5; i++) cr.append(sv('line', {x1:hw + 0.7, y1:i * 0.5, x2:hw + 3.1, y2:i * 0.5, ...ln, 'stroke-opacity':0.5}));
+  add_(cr);
+  add_(sv('path', {d:pd([caseShape(c.cs, Rc)]), fill:steel[0], ...ln}));
+  const rI = R + 0.9, rE = Math.max(rI + 0.6, Math.min(Rc - 0.25, R + 6));
+  if (c.bez === 'dive') {
+    add_(sv('circle', {cx:0, cy:0, r:rE, fill:night ? '#1a1a1a' : '#d9dbdd', ...ln}));
+    const kn = sv('g', {}); for (let i = 0; i < 120; i++) { const [x1, y1] = pol(rE - 0.45, i * 3), [x2, y2] = pol(rE, i * 3); kn.append(sv('line', {x1, y1, x2, y2, ...ln, 'stroke-opacity':0.55})); } add_(kn);
+    const rIn = rE - 0.8; add_(sv('circle', {cx:0, cy:0, r:rIn, fill:night ? '#080808' : '#151515'}));
+    const mk = sv('g', {fill:night ? '#3a3a3a' : '#dcdcd8', stroke:'none'}), wI = rIn - rI;
+    for (let i = 1; i < 60; i++) { const big = i % 5 === 0, L = big ? wI * 0.32 : i < 15 ? wI * 0.2 : 0; if (!L) continue; const w = big ? 0.32 : 0.14, a = i * 6, p = rectP(...pol(rIn - 0.35 - L / 2, a), w, L, a, 0); mk.append(sv('path', {d:pd([p])})); }
+    for (const n of [10, 20, 30, 40, 50]) { const [x, y] = pol(rI + wI * 0.38, n * 6); const tx = sv('text', {x, y, 'font-size':Math.min(1.7, wI * 0.4), 'font-family':'Atkinson Hyperlegible Next', 'font-weight':700, 'text-anchor':'middle', 'dominant-baseline':'central', transform:`rotate(${n * 6 > 90 && n * 6 < 270 ? n * 6 + 180 : n * 6} ${x} ${y})`}); tx.textContent = String(n); mk.append(tx); }
+    const tri = [pol(rIn - 0.3, -4.2), pol(rIn - 0.3, 4.2), pol(rIn - 0.35 - wI * 0.55, 0)]; mk.append(sv('path', {d:pd([tri])})); add_(mk);
+    const [px, py] = pol(rIn - 0.3 - wI * 0.22, 0); add_(sv('circle', {cx:px, cy:py, r:Math.min(0.42, wI * 0.1), fill:night ? LUME.C3.glow : LUME.C3.day, filter:night ? 'url(#glow)' : null}));
+  } else if (c.bez === 'smooth') {
+    add_(sv('circle', {cx:0, cy:0, r:rE, fill:night ? '#1a1a1a' : '#e4e6e8', ...ln})); add_(sv('circle', {cx:0, cy:0, r:(rE + rI) / 2, fill:'none', stroke:night ? '#202020' : '#ffffff', 'stroke-width':2, 'stroke-opacity':0.6, 'vector-effect':'non-scaling-stroke'}));
+  }
+  add_(sv('circle', {cx:0, cy:0, r:rI, fill:night ? '#050505' : '#3b3c3e', ...ln}));
+}
+function handThumb(k, c) {
+  const s = document.createElementNS(NS, 'svg'), L = HSTY[k].L, fin = HFIN[c.fin] || HFIN.silver, lu = c.lu && LUME[c.lu] ? LUME[c.lu] : null;
+  s.setAttribute('viewBox', '-4.6 -13.4 9.2 15.2');
+  const hEl = handEl(hg(`${k}h${L[0]}`, () => handGeo(k, 'h', L[0])), 0, fin[0], c.fin === 'black' ? '#777' : fin[1], lu, false, false); hEl.setAttribute('transform', 'translate(-2 0)');
+  const mEl = handEl(hg(`${k}m${L[1]}`, () => handGeo(k, 'm', L[1])), 0, fin[0], c.fin === 'black' ? '#777' : fin[1], lu, false, false); mEl.setAttribute('transform', 'translate(2 0)');
+  s.append(hEl, mEl); return s;
+}
+function previewSection() {
+  const c = prevCfg(), t = T(), re = () => { prevKey = ''; scheduleRender(); };
+  secEl('Hands & case preview', row('Show on the dial', tog(() => prevOn(), v => { setPv('on', v); syncChrome(); gkeyLast = ''; setTimeout(fit, 0); }, true)),
+    h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Generic hands and case, screen only. Never exported or sent. The watch button on the canvas turns it on or off from any step.'));
+  if (!c.on) return;
+  secEl('Hands', h('div', {class:'hcards'}, ...Object.entries(HSTY).map(([k, s]) => h('button', {type:'button', class:'hcard', 'aria-pressed':String(c.hs === k), onclick:() => { setPv('hs', k); commit(); renderPanel(); scheduleRender(); }}, handThumb(k, c), s.n))),
+    row('Finish', seg(() => c.fin, v => setPv('fin', v), [['silver', 'Silver'], ['black', 'Black'], ['gold', 'Gold']])),
+    row('Lume', seg(() => c.lu, v => setPv('lu', v), [['C3', 'C3'], ['BGW9', 'BGW9'], ['', 'None']])),
+    row('Seconds', seg(() => c.red ? 'red' : 'm', v => setPv('red', v === 'red'), [['m', 'Match'], ['red', 'Red']])),
+    row('Hour hand', num(() => prevCfg().H, v => { setPv('H', Math.max(1, v)); re(); }, 'L'), UL()), row('Minute hand', num(() => prevCfg().M, v => { setPv('M', Math.max(1, v)); re(); }, 'L'), UL()), row('Seconds hand', num(() => prevCfg().S, v => { setPv('S', Math.max(1, v)); re(); }, 'L'), UL()),
+    h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Center to tip. Hand listings give H/M/S in mm${doc.units === 'in' ? '; tap mm at the top to type them as listed' : ''}.`),
+    t.mv === 'NH34' ? [row('GMT hand', tog(() => prevCfg().gmt, v => setPv('gmt', v), true)), prevCfg().gmt ? row('GMT length', num(() => prevCfg().G, v => { setPv('G', Math.max(1, v)); re(); }, 'L'), UL()) : null] : null,
+    row('Time shown', (() => { const el = h('input', {type:'time', step:1, value:c.time}); el.addEventListener('change', () => { setPv('time', el.value || '10:08:37'); commit(); scheduleRender(); }); return el; })()));
+  secEl('Case', row('Shape', seg(() => c.cs, v => setPv('cs', v), [['round', 'Round'], ['cushion', 'Cushion'], ['tonneau', 'Tonneau'], ['none', 'None']])),
+    c.cs === 'none' ? null : [row('Case width', num(() => prevCfg().cd, v => { setPv('cd', Math.max(2 * t.R + 4, v)); re(); }, 'L'), UL()),
+      row('Strap width', choose(() => c.lug, v => setPv('lug', v), [[18, '18 mm'], [19, '19 mm'], [20, '20 mm'], [22, '22 mm']])),
+      row('Bezel', seg(() => c.bez, v => setPv('bez', v), [['dive', 'Dive'], ['smooth', 'Smooth'], ['none', 'None']])),
+      row('Crown', seg(() => c.crown, v => setPv('crown', v), [[3, '3 o’clock'], [4, '4 o’clock']])), row('Strap', tog(() => c.strap, v => setPv('strap', v)))]);
 }
 
 /* ================= boot ================= */
@@ -1524,9 +1793,10 @@ async function boot() {
   doc = pj.designs[0]; setTool('sel');
   loadProj(pj);
   if (!window.ClipperLib) pb.prepend(h('div', {class:'banner'}, 'The geometry library did not load, so shapes cannot be drawn. Reload the app.'));
+  let sm = 'half'; try { sm = localStorage.getItem('db.sheet') || 'half'; } catch (e) {} sheetTo(sm, false);
   requestAnimationFrame(fit); loadFontIndex();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
-if (location.hostname === 'localhost') window.__db = {buildLayers, svgOut, dxfOut, depthPNG, zip, readme, jobSheetPDF, preflight, get doc() { return doc; }, get proj() { return proj; }, geomOf, switchDesign, newDesign, select};
+if (location.hostname === 'localhost') window.__db = {buildLayers, svgOut, dxfOut, depthPNG, zip, readme, jobSheetPDF, preflight, get doc() { return doc; }, get proj() { return proj; }, geomOf, switchDesign, newDesign, select, goStep, setTool, sheetTo, runCheck, get step() { return step; }, get etab() { return etab; }};
 boot();
 })();
