@@ -5,6 +5,8 @@ const ICON_DATA = "10k 10mp 11mp 123 12mp 13mp 14mp 15mp 16mp 17mp 18_up_rating 
 const CATS = {S:'Sans', R:'Serif', D:'Display', H:'Script', M:'Mono'};
 let FONTS = [], FMAP = new Map(), PICKS = [];
 const ICONS = ICON_DATA.split(' ');
+const STD_FONTS = ['Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', 'Atkinson Hyperlegible Mono'];
+const LUME = {C3:{n:'Super-LumiNova C3 (green)', day:'#e4ecc9', glow:'#8dff6e'}, BGW9:{n:'Super-LumiNova BGW9 (blue)', day:'#f1f4f2', glow:'#7ad6ff'}, OR:{n:'Old Radium (vintage)', day:'#d8c497', glow:'#b9e66b'}};
 const PICK_NAMES = ['Barlow Condensed','Oswald','Bebas Neue','Roboto Condensed','Saira Condensed','Archivo Narrow','Teko','Rajdhani','Michroma','Orbitron','Syncopate','Josefin Sans','Montserrat','Cinzel','Marcellus','Italiana','Playfair Display','Bodoni Moda','EB Garamond','Cormorant Garamond','Libre Baskerville','Great Vibes','Pinyon Script','IBM Plex Mono'];
 async function loadFontIndex() {
   try { const r = await fetch('fonts/index.json'); const idx = await r.json();
@@ -118,12 +120,12 @@ const nid = () => (doc.nid = (doc.nid || 1) + 1);
 const add = o => { o.id = nid(); doc.objs.push(o); return o; };
 function blankDoc(tpl = 'NH36-3H') {
   return {v:2, kind:'dial', name:'Dial design', panel:null, tpl, units:'in', safe:0.9, gap:0.3, snap:true, nid:1, objs:[], imgs:{}, fonts:{},
-    guides:{outline:1, safe:1, hole:1, win:1, feet:1, subs:1, grid:0, back:0}, look:{dial:'#1b2430', ink:'#e3e7ec'},
+    guides:{outline:1, safe:1, hole:1, win:1, feet:1, subs:1, grid:0, back:0}, look:{dial:'#262626', ink:'#ececea'},
     ex:{outline:false, cut:false, prof:'lb', dpi:1000, inv:false}};
 }
 const BASE = {fill:true, sw:0, bw:0, bs:3, bp:'flat', ex:false};
 function ringPreset(k, ctr = 'main') {
-  const o = {t:'ring', ctr, k, r:13, off:0, tk:'line', bo:false, bi:false, bw2:0.06, num:'none', ne:5, nh:0.5, np:'in', ng:0.15, nr:'up', font:'Barlow Condensed', wt:500, it:false, ntr:0, mode:'track', clr:0.15, cutWin:true, z:'60', z24:'24', pad:false, ...BASE};
+  const o = {t:'ring', ctr, k, r:13, off:0, tk:'line', bo:false, bi:false, bw2:0.06, num:'none', ne:5, nh:0.5, np:'in', ng:0.15, nr:'up', font:'Atkinson Hyperlegible Next', wt:500, it:false, ntr:0, mode:'track', clr:0.15, cutWin:true, z:'60', z24:'24', pad:false, ...BASE};
   Object.assign(o, {
     sec:{n:60, maj:5, ml:0.5, nl:0.3, mw:0.12, nw:0.07},
     min:{n:60, maj:5, ml:0.5, nl:0.3, mw:0.12, nw:0.07, num:'arabic', ne:5, nh:0.5},
@@ -139,15 +141,15 @@ function ringPreset(k, ctr = 'main') {
   }
   return o;
 }
-const mkPreset = (ctr = 'main') => ({t:'mk', ctr, st:'bar', n:12, r:12.4, L:2.0, W:0.6, e12:'double', skip:'', auto:true, clr:0.25, nr:'up', font:'Barlow Condensed', wt:600, it:false, tr:0, off:0, ...BASE});
+const mkPreset = (ctr = 'main') => ({t:'mk', ctr, st:'bar', n:12, r:12.4, L:2.0, W:0.6, e12:'double', skip:'', auto:true, clr:0.25, nr:'up', font:'Atkinson Hyperlegible Next', wt:600, it:false, tr:0, off:0, ...BASE});
 function sampleDoc() {
   doc = blankDoc('NH36-3H');
   add({...ringPreset('min'), num:'none', mode:'furn', bo:true, bw2:0.07, name:'Minute track (furniture)'});
   add({...mkPreset(), L:2.2, W:0.62, bw:0.14, bs:3, name:'Bar indices'});
   add({...ringPreset('mil'), nh:0.42, name:'Military 13–24'});
   restack('main');
-  add({t:'text', x:0, y:-6.1, rot:0, s:'SAMPLE', font:'Barlow Condensed', wt:600, it:false, h:0.85, tr:0.12, al:'c', curve:false, cr:6, ca:0, cx:0, cy:0, inside:false, ...BASE, name:'Example wordmark'});
-  add({t:'text', x:0, y:4.4, rot:0, s:'AUTOMATIC', font:'Barlow Condensed', wt:500, it:false, h:0.42, tr:0.16, al:'c', curve:false, cr:6, ca:0, cx:0, cy:0, inside:false, ...BASE});
+  add({t:'text', x:0, y:-6.1, rot:0, s:'SAMPLE', font:'Atkinson Hyperlegible Next', wt:600, it:false, h:0.85, tr:0.12, al:'c', curve:false, cr:6, ca:0, cx:0, cy:0, inside:false, ...BASE, name:'Example wordmark'});
+  add({t:'text', x:0, y:4.4, rot:0, s:'AUTOMATIC', font:'Atkinson Hyperlegible Next', wt:500, it:false, h:0.42, tr:0.16, al:'c', curve:false, cr:6, ca:0, cx:0, cy:0, inside:false, ...BASE});
   add({t:'icon', x:0, y:7.2, rot:0, name:'anchor', st:'outlined', wt:400, fl:0, sz:1.7, ...BASE});
   return doc;
 }
@@ -452,8 +454,8 @@ function fit() { const r = sRect(), asp = (r.height || 1) / (r.width || 1), b = 
 function mmAt(X, Y) { const r = sRect(), hh = view.w * r.height / r.width; return [view.x - view.w / 2 + (X - r.left) / r.width * view.w, view.y - hh / 2 + (Y - r.top) / r.height * hh]; }
 let gkeyLast = '';
 function drawGuides() {
-  const t = T(), G = doc.guides, k = JSON.stringify([doc.tpl, doc.kind, doc.panel, G, doc.safe, doc.look]); if (k === gkeyLast) return; gkeyLast = k;
-  gDial.replaceChildren(sv('path', {d:pd([dialPoly(t)]), fill:doc.look.dial}));
+  const t = T(), G = doc.guides, k = JSON.stringify([doc.tpl, doc.kind, doc.panel, G, doc.safe, doc.look, view.lume]); if (k === gkeyLast) return; gkeyLast = k;
+  gDial.replaceChildren(sv('path', {d:pd([dialPoly(t)]), fill:view.lume ? '#060606' : doc.look.dial}));
   gGuide.replaceChildren();
   const ln = {fill:'none', stroke:'var(--guide)', 'stroke-width':1, 'vector-effect':'non-scaling-stroke'};
   const add_ = e => gGuide.append(e);
@@ -468,27 +470,29 @@ function drawGuides() {
   if (G.subs && t.subs) for (const s of Object.values(t.subs)) { add_(sv('circle', {cx:s.x, cy:-s.y, r:t.smax / 2, ...ln, 'stroke-dasharray':'4 4'})); add_(sv('circle', {cx:s.x, cy:-s.y, r:t.sh / 2, fill:'url(#hatch)', stroke:'var(--warn)', 'stroke-width':1, 'vector-effect':'non-scaling-stroke'})); }
 }
 function drawObjs() {
-  gObj.replaceChildren(); const ink = doc.look.ink;
+  gObj.replaceChildren(); const ink = doc.look.ink, night = view.lume;
+  const colOf = o => o.lume && LUME[o.lume] ? (night ? LUME[o.lume].glow : LUME[o.lume].day) : night ? '#2b2b2b' : (o.col || ink);
   for (const o of doc.objs) {
     if (o.hid) continue; const g = geomOf(o), grp = sv('g', {'data-id':o.id});
     if (o.t === 'ring' || o.t === 'mk') { const C = ctrOf(o), w = Math.max(0.2, ringWidth(o)); grp.append(sv('circle', {cx:C[0], cy:C[1], r:o.r - w / 2, fill:'none', stroke:'transparent', 'stroke-width':w, 'pointer-events':'stroke'})); }
-    if (g.dF) grp.append(sv('path', {d:g.dF, fill:ink, 'fill-rule':'evenodd'}));
-    g.dB.forEach(d => grp.append(sv('path', {d, fill:'#000', 'fill-opacity':0.2, 'fill-rule':'evenodd'})));
-    if (g.dH) grp.append(sv('path', {d:g.dH, fill:'none', stroke:ink, 'stroke-width':1.3, 'vector-effect':'non-scaling-stroke'}));
+    const c = colOf(o), glow = night && o.lume ? 'url(#glow)' : null;
+    if (g.dF) grp.append(sv('path', {d:g.dF, fill:c, 'fill-rule':'evenodd', filter:glow}));
+    if (!night) g.dB.forEach(d => grp.append(sv('path', {d, fill:'#000', 'fill-opacity':0.2, 'fill-rule':'evenodd'})));
+    if (g.dH) grp.append(sv('path', {d:g.dH, fill:'none', stroke:c, 'stroke-width':1.3, 'vector-effect':'non-scaling-stroke', filter:glow}));
     const hd = g.dF + g.dH; if (hd) grp.append(sv('path', {d:hd, fill:'transparent', stroke:'transparent', 'stroke-width':16, 'vector-effect':'non-scaling-stroke', 'pointer-events':'all'}));
     gObj.append(grp);
   }
 }
 function drawSel() {
   gSel.replaceChildren(); const o = selObj(); if (!o || o.hid) return; const bb = geomOf(o).bb; if (!bb) return; const p = 0.12;
-  gSel.append(sv('rect', {x:bb[0] - p, y:bb[1] - p, width:bb[2] - bb[0] + 2 * p, height:bb[3] - bb[1] + 2 * p, fill:'none', stroke:'var(--accent)', 'stroke-width':1.4, 'stroke-dasharray':'5 3', 'vector-effect':'non-scaling-stroke'}));
-  if (o.t === 'spl') for (const q of o.pts) gSel.append(sv('circle', {cx:q[0], cy:q[1], r:3.5 / pxmm(), fill:'var(--accent)'}));
+  gSel.append(sv('rect', {x:bb[0] - p, y:bb[1] - p, width:bb[2] - bb[0] + 2 * p, height:bb[3] - bb[1] + 2 * p, fill:'none', stroke:'var(--sel)', 'stroke-width':1.6, 'stroke-dasharray':'5 3', 'vector-effect':'non-scaling-stroke'}));
+  if (o.t === 'spl') for (const q of o.pts) gSel.append(sv('circle', {cx:q[0], cy:q[1], r:3.5 / pxmm(), fill:'var(--sel)'}));
 }
 function drawTmp() {
   gTmp.replaceChildren(); if (pfThin.length) gTmp.append(sv('path', {d:pd(pfThin), fill:'#ff2a2a', 'fill-opacity':0.85, 'fill-rule':'evenodd'}));
   if (tool !== 'spl' || !spl.length) return; const r = 3.5 / pxmm();
-  gTmp.append(sv('path', {d:pd([splinePts(spl, false, true)], false), fill:'none', stroke:'var(--accent)', 'stroke-width':1.5, 'vector-effect':'non-scaling-stroke'}));
-  spl.forEach((q, i) => gTmp.append(sv('circle', {cx:q[0], cy:q[1], r:i ? r : r * 1.6, fill:i ? 'var(--accent)' : 'none', stroke:'var(--accent)', 'stroke-width':1.5, 'vector-effect':'non-scaling-stroke'})));
+  gTmp.append(sv('path', {d:pd([splinePts(spl, false, true)], false), fill:'none', stroke:'var(--sel)', 'stroke-width':1.5, 'vector-effect':'non-scaling-stroke'}));
+  spl.forEach((q, i) => gTmp.append(sv('circle', {cx:q[0], cy:q[1], r:i ? r : r * 1.6, fill:i ? 'var(--sel)' : 'none', stroke:'var(--sel)', 'stroke-width':1.5, 'vector-effect':'non-scaling-stroke'})));
 }
 const fmtL = mm => doc.units === 'in' ? (mm / 25.4).toFixed(4) : mm.toFixed(3);
 const UL = () => doc.units === 'in' ? 'in' : 'mm';
@@ -631,7 +635,7 @@ $('#splBar').addEventListener('click', e => { const a = e.target.closest('button
   $('#splBar').hidden = !spl.length; scheduleRender(); });
 function placeAt(m) {
   const p = snapC(m);
-  if (tool === 'text') { const r = Math.hypot(...p), a = angOf(p); const o = add({t:'text', x:p[0], y:p[1], rot:0, s:'TEXT', font:'Barlow Condensed', wt:500, it:false, h:0.7, tr:0.05, al:'c', curve:false, cr:+Math.max(1, r).toFixed(3), ca:+a.toFixed(2), cx:0, cy:0, inside:a > 90 && a < 270, ...BASE}); commit(); setTool('sel'); select(o.id); setTimeout(() => { const i = $('#f_text'); if (i) { i.focus(); i.select(); } }, 60); }
+  if (tool === 'text') { const r = Math.hypot(...p), a = angOf(p); const o = add({t:'text', x:p[0], y:p[1], rot:0, s:'TEXT', font:'Atkinson Hyperlegible Next', wt:500, it:false, h:0.7, tr:0.05, al:'c', curve:false, cr:+Math.max(1, r).toFixed(3), ca:+a.toFixed(2), cx:0, cy:0, inside:a > 90 && a < 270, ...BASE}); commit(); setTool('sel'); select(o.id); setTimeout(() => { const i = $('#f_text'); if (i) { i.focus(); i.select(); } }, 60); }
   if (tool === 'icon') openIconPicker(null, (name, st) => { const o = add({t:'icon', x:p[0], y:p[1], rot:0, name, ...st, sz:2, ...BASE}); commit(); setTool('sel'); select(o.id); });
   if (tool === 'img') pickFile('image/png,image/svg+xml,image/jpeg,image/webp', f => readImage(f, id => { const o = add({t:'img', x:p[0], y:p[1], rot:0, w:4, img:id, th:0.5, inv:false, ...BASE}); commit(); setTool('sel'); select(o.id); }));
 }
@@ -671,31 +675,32 @@ async function addUserFont(file) {
 
 /* ================= export ================= */
 function buildLayers() {
-  const base = [], score = [], bev = [], t = T(), cut = [];
-  for (const o of doc.objs) { if (o.hid) continue; const g = geomOf(o); base.push(...g.F); score.push(...g.H); g.B.forEach((b, i) => (bev[i] = bev[i] || []).push(...b)); }
+  const base = [], score = [], bev = [], t = T(), cut = [], lume = [];
+  for (const o of doc.objs) { if (o.hid) continue; const g = geomOf(o); base.push(...g.F); score.push(...g.H); g.B.forEach((b, i) => (bev[i] = bev[i] || []).push(...b)); if (o.lume) lume.push(...g.F); }
   if (t.panel) cut.push(dialPoly(t)); else if (doc.ex.cut) { cut.push(dialPoly(t)); if (t.hole) cut.push(circ(0, 0, t.hole / 2)); cut.push(...tplWins(t)); }
-  return {base:U(base), score, bev:bev.map(b => U(b)), cut, outline:!t.panel && doc.ex.outline && !doc.ex.cut ? dialPoly() : null};
+  return {base:U(base), score, bev:bev.map(b => U(b)), cut, lume:U(lume), outline:!t.panel && doc.ex.outline && !doc.ex.cut ? dialPoly() : null};
 }
 const PROF = {lb:{n:'LightBurn palette', eng:'#000000', score:'#0000FF', cut:'#FF0000'}, ponoko:{n:'Ponoko colors (gray fill engrave, red line engrave, blue cut)', eng:'#808080', score:'#FF0000', cut:'#0000FF'}};
-const bevCol = i => LB_PAL[(i + 3) % LB_PAL.length];
+const BEVC = [3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15], bevCol = i => LB_PAL[BEVC[i % BEVC.length]], LUMEC = LB_PAL[6];
 function svgOut(L, prof = doc.ex.prof || 'lb') {
   const t = T(), b = bnds(), W = b[2] - b[0], H = b[3] - b[1], c = PROF[prof] || PROF.lb, f = v => +v.toFixed(4), P = (ps, cl = true) => ps.map(p => 'M' + p.map(q => f(q[0]) + ' ' + f(q[1])).join(' L') + (cl ? ' Z' : '')).join(' ');
   let s = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}mm" height="${f(H)}mm" viewBox="${f(b[0])} ${f(b[1])} ${f(W)} ${f(H)}">\n<!-- Dial Bench: ${t.panel ? doc.name : t.mv + ' ' + t.lbl}. 1:1 scale, units mm, center at 0,0. Colors: ${c.n}. -->\n`;
   if (L.base.length) s += `<g id="Engrave" fill="${c.eng}" stroke="none" fill-rule="evenodd"><path d="${P(L.base)}"/></g>\n`;
   if (L.score.length) s += `<g id="Score" fill="none" stroke="${c.score}" stroke-width="0.025">${L.score.map(x => `<path d="${P([x.p], x.c)}"/>`).join('')}</g>\n`;
   L.bev.forEach((bv, i) => { s += `<g id="Bevel_${i + 1}" fill="${bevCol(i)}" stroke="none" fill-rule="evenodd"><path d="${P(bv)}"/></g>\n`; });
+  if (L.lume && L.lume.length) s += `<g id="Lume" fill="${LUMEC}" stroke="none" fill-rule="evenodd"><path d="${P(L.lume)}"/></g>\n`;
   if (L.cut.length) s += `<g id="Cut" fill="none" stroke="${c.cut}" stroke-width="0.025"><path d="${P(L.cut)}"/></g>\n`;
   if (L.outline) s += `<g id="Dial_outline" fill="none" stroke="${LB_PAL[8]}" stroke-width="0.025"><path d="${P([L.outline])}"/></g>\n`;
   return s + '</svg>\n';
 }
 function dxfOut(L) {
   const inch = doc.units === 'in', k = inch ? 1 / 25.4 : 1, f = v => (v * k).toFixed(6), o = [], p = (...a) => o.push(...a);
-  const lays = [['ENGRAVE', 7], ['SCORE', 5], ['CUT', 1], ...L.bev.map((_, i) => [`BEVEL_${i + 1}`, ACI[i % ACI.length]])]; if (L.outline) lays.push(['DIAL_OUTLINE', 8]);
+  const lays = [['ENGRAVE', 7], ['SCORE', 5], ['CUT', 1], ['LUME', 4], ...L.bev.map((_, i) => [`BEVEL_${i + 1}`, ACI[i % ACI.length]])]; if (L.outline) lays.push(['DIAL_OUTLINE', 8]);
   p('0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', inch ? '1' : '4', '0', 'ENDSEC');
   p('0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', String(lays.length)); for (const [n, c] of lays) p('0', 'LAYER', '2', n, '70', '0', '62', String(c), '6', 'CONTINUOUS'); p('0', 'ENDTAB', '0', 'ENDSEC');
   p('0', 'SECTION', '2', 'ENTITIES');
   const pl = (pts, lay, closed) => { p('0', 'POLYLINE', '8', lay, '66', '1', '70', closed ? '1' : '0', '10', '0', '20', '0', '30', '0'); for (const q of pts) p('0', 'VERTEX', '8', lay, '10', f(q[0]), '20', f(-q[1]), '30', '0'); p('0', 'SEQEND', '8', lay); };
-  L.base.forEach(q => pl(q, 'ENGRAVE', 1)); L.score.forEach(x => pl(x.p, 'SCORE', x.c)); L.cut.forEach(q => pl(q, 'CUT', 1)); L.bev.forEach((bv, i) => bv.forEach(q => pl(q, `BEVEL_${i + 1}`, 1))); if (L.outline) pl(L.outline, 'DIAL_OUTLINE', 1);
+  L.base.forEach(q => pl(q, 'ENGRAVE', 1)); L.score.forEach(x => pl(x.p, 'SCORE', x.c)); L.cut.forEach(q => pl(q, 'CUT', 1)); (L.lume || []).forEach(q => pl(q, 'LUME', 1)); L.bev.forEach((bv, i) => bv.forEach(q => pl(q, `BEVEL_${i + 1}`, 1))); if (L.outline) pl(L.outline, 'DIAL_OUTLINE', 1);
   p('0', 'ENDSEC', '0', 'EOF'); return o.join('\r\n') + '\r\n';
 }
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -731,7 +736,7 @@ function readme(L) {
     t.panel ? '' : `Dial: Ø ${mm(2 * t.R)}${t.flats ? ', with two crown-side flats' : ''}. Geometry source: ${t.src}`, '',
     'Files', `  design.svg   1:1, units mm, center at 0,0. Colors: ${c.n}`, `  design.dxf   R12 polylines in ${u === 'in' ? 'inches' : 'millimeters'}, center at 0,0, Y up`,
     `  job-sheet.pdf  page 1 specs and tolerances, page 2 artwork at 1:1, page 3 enlarged reference`, `  depth-${doc.ex.dpi}dpi.png  grayscale depth map, ${doc.ex.inv ? 'black = surface' : 'white = surface'}, darker steps are deeper`, '',
-    'Layers', `  Engrave: filled areas`, `  Score: hairlines and open lines${L.score.length ? '' : ' (empty)'}`, `  Cut: ${L.cut.length ? (t.panel ? 'part outline' : 'dial outline, center hole and windows') : 'none'}`,
+    'Layers', `  Engrave: filled areas`, L.lume && L.lume.length ? `  Lume: areas to fill with lume (${lumeNames()}). Also included in Engrave.` : '', `  Score: hairlines and open lines${L.score.length ? '' : ' (empty)'}`, `  Cut: ${L.cut.length ? (t.panel ? 'part outline' : 'dial outline, center hole and windows') : 'none'}`,
     ...L.bev.map((_, i) => `  Bevel_${i + 1}: bevel step ${i + 1}, inset further from each edge. One extra pass per step after Engrave.`),
     L.outline ? '  Dial_outline: alignment only, do not engrave' : '', '', 'Text, icons and logos are vector outlines. No fonts are needed.'].filter(x => x !== '').join('\n');
 }
@@ -776,6 +781,9 @@ $('#undoB').onclick = undo; $('#redoB').onclick = redo;
 $('#zIn').onclick = () => { view.w = clamp(view.w / 1.4, 1.5, 90); scheduleRender(); };
 $('#zOut').onclick = () => { view.w = clamp(view.w * 1.4, 1.5, 90); scheduleRender(); };
 $('#zFit').onclick = fit;
+$('#lumeB').onclick = () => { view.lume = !view.lume; $('#lumeB').setAttribute('aria-pressed', String(view.lume)); gkeyLast = ''; scheduleRender(); toast(view.lume ? 'Lume view: only lumed parts glow' : 'Daylight view'); };
+$('#bigB').onclick = () => { const s = $('#stage'), on = !s.classList.contains('big'); s.classList.toggle('big', on); $('#bigB').setAttribute('aria-pressed', String(on)); try { localStorage.setItem('db.big', on ? '1' : ''); } catch (e) {} setTimeout(() => { fit(); }, 230); };
+try { if (localStorage.getItem('db.big')) { $('#stage').classList.add('big'); $('#bigB').setAttribute('aria-pressed', 'true'); } } catch (e) {}
 $('#gBtn').onclick = () => { gmode = gmode === 'obj' ? 'view' : 'obj'; syncChrome(); toast(gmode === 'obj' ? 'Two fingers scale and rotate the selected shape' : 'Two fingers zoom and pan the view'); };
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; renderPanel(); });
 const tabFns = () => ({obj:pObj, rings:pRings, layers:pLayers, tpl:pTpl, order:pOrder});
@@ -799,7 +807,7 @@ function renderPanelSoft() { const a = document.activeElement; if (a && pb.conta
 function syncFields() { for (const f of fields) f(); }
 const slug = s => 'f_' + String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_');
 const secEl = (title, ...kids) => { const d = h('section', {class:'sec'}, title ? h('h3', {}, title) : null, ...kids); pb.append(d); return d; };
-function row(label, ctl, unit = '') { if (ctl.id === '' || !ctl.id) ctl.id = slug(label); return h('label', {class:'row', for:ctl.id}, h('span', {}, label), ctl, h('span', {class:'un'}, unit)); }
+function row(label, ctl, unit = '') { if (ctl.id === '' || !ctl.id) ctl.id = slug(label); return h('label', {class:'row', for:ctl.id}, h('span', {}, label), ctl._wrap || ctl, h('span', {class:'un'}, unit)); }
 function num(get, set, k = 'L', o = {}) {
   const fmt = v => v == null || !isFinite(v) ? '' : k === 'L' ? fmtL(v) : k === 'A' ? (+v).toFixed(2) : k === 'I' ? String(Math.round(v)) : String(+(+v).toFixed(3));
   const inp = h('input', {type:'text', inputmode:'decimal', autocomplete:'off', spellcheck:'false', value:fmt(get())});
@@ -808,6 +816,9 @@ function num(get, set, k = 'L', o = {}) {
   inp.addEventListener('change', () => { inp.value = fmt(get()); commit(); if (o.re) renderPanel(); });
   inp.addEventListener('focus', () => setTimeout(() => inp.select(), 0));
   fields.push(() => { if (document.activeElement !== inp) inp.value = fmt(get()); });
+  const step = o.step ?? (k === 'L' ? (doc.units === 'in' ? 0.0254 : 0.01) : k === 'A' ? 1 : k === 'I' ? 1 : 0.05);
+  const bump = d => { let v = (+get() || 0) + d * step; if (o.min != null) v = Math.max(o.min, v); if (o.max != null) v = Math.min(o.max, v); set(+v.toFixed(6)); inp.value = fmt(get()); scheduleRender(); clearTimeout(inp._ct); inp._ct = setTimeout(() => { commit(); if (o.re) renderPanel(); }, 600); };
+  inp._wrap = h('div', {class:'stp'}, h('button', {type:'button', 'aria-label':'Decrease', onclick:e => { e.preventDefault(); bump(-1); }}, '−'), inp, h('button', {type:'button', 'aria-label':'Increase', onclick:e => { e.preventDefault(); bump(1); }}, '+'));
   return inp;
 }
 const unitOf = k => k === 'L' ? UL() : k === 'A' ? '°' : '';
@@ -831,6 +842,13 @@ function moveZ(o, d) { const i = doc.objs.indexOf(o), j = i + d; if (j < 0 || j 
 function stackMove(o, d) { const st = stackOf(o.ctr || 'main'), i = st.indexOf(o), other = st[i + d]; if (!other) return; const a = doc.objs.indexOf(o), b = doc.objs.indexOf(other); [doc.objs[a], doc.objs[b]] = [doc.objs[b], doc.objs[a]]; restack(o.ctr || 'main'); commit(); renderPanel(); scheduleRender(); }
 function ctrOpts() { const t = T(), o = [['main', 'Dial center']]; if (t.subs) for (const [k, s] of Object.entries(t.subs)) o.push([k, s.n]); return o; }
 
+function colorCtl(o) {
+  const SW = ['', '#ececea', '#1c1c1c', '#c0c3c6', '#b8913a', '#c8102e', '#1f4fa8'], d = h('div', {class:'sw'});
+  for (const c of SW) d.append(h('button', {type:'button', class:'swb' + ((o.col || '') === c ? ' on' : ''), style:`background:${c || doc.look.ink}`, 'aria-label':c ? 'Color ' + c : 'Design color', title:c ? c : 'Design color', onclick:e => { e.preventDefault(); o.col = c || undefined; commit(); scheduleRender(); renderPanel(); }}, c ? '' : 'A'));
+  const pick = h('input', {type:'color', value:o.col || doc.look.ink, 'aria-label':'Custom color'}); pick.addEventListener('input', () => { o.col = pick.value; scheduleRender(); }); pick.addEventListener('change', () => { commit(); renderPanel(); });
+  d.append(pick); return d;
+}
+const lumeNames = () => [...new Set(doc.objs.filter(o => !o.hid && o.lume && LUME[o.lume]).map(o => LUME[o.lume].n))].join(', ');
 function pObj() {
   const o = selObj();
   if (!o) { pb.append(h('div', {class:'empty'}, h('p', {}, h('b', {}, 'Nothing selected.')), h('p', {class:'muted'}, 'Tap a shape on the dial to edit it, or pick a tool and draw. Rings and indices are in the Rings tab; designs, movement and guide layers are in Design; ordering is in Order.'))); return; }
@@ -895,6 +913,8 @@ function pObj() {
   secEl('Engrave', open ? null : row('Mode', seg(() => o.fill !== false, v => o.fill = v, [[true, 'Fill'], [false, 'Outline']])),
     open || o.fill === false ? N(o, 'Line width', 'sw', 'L', {min:0}) : null,
     open || o.fill === false ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Line width 0 exports a hairline on the Score layer. Above 0, the line becomes an engraved band of that exact width.') : null,
+    row('Color', colorCtl(o)), row('Lume', choose(() => o.lume || '', v => o.lume = v || undefined, [['', 'None'], ...Object.entries(LUME).map(([k, l]) => [k, l.n])])),
+    o.lume ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Lumed areas also export on their own Lume layer and as a lume stencil. Tap the moon on the canvas to see the glow.') : null,
     o.t === 'ring' ? null : row('Exclusion zone', tog(() => o.ex, v => o.ex = v)),
     o.t === 'ring' ? null : h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Furniture rings stop short of exclusion zones. Hour indices are always exclusion zones.'));
   secEl('Bevel', N(o, 'Bevel width', 'bw', 'L', {min:0}), N(o, 'Steps', 'bs', 'I', {min:1, max:12}), row('Profile', seg(() => o.bp, v => o.bp = v, [['flat', 'Flat'], ['round', 'Rounded']])),
@@ -977,7 +997,7 @@ function pTpl() {
   const preset = (d, i, l) => h('button', {type:'button', class:'mini', onclick:() => { doc.look.dial = d; doc.look.ink = i; commit(); renderPanel(); scheduleRender(); }}, l);
   secEl('Preview colors (screen only)', pc('dial', t.panel ? 'Material' : 'Dial'), pc('ink', 'Engraving'),
     t.panel ? h('div', {class:'chips'}, preset('#7a4a2c', '#2a170c', 'Brown leather'), preset('#1c1a19', '#8a8580', 'Black leather'), preset('#c9a06d', '#3b2414', 'Light wood'), preset('#5a3a24', '#1b0f07', 'Walnut'))
-      : h('div', {class:'chips'}, preset('#1b2430', '#e3e7ec', 'Black dial'), preset('#f2f0ea', '#232a33', 'White dial'), preset('#1d3f8a', '#e8edf5', 'Blue dial'), preset('#b9bec4', '#3a4048', 'Steel')));
+      : h('div', {class:'chips'}, preset('#1c1c1c', '#ececea', 'Black'), preset('#f3f2ef', '#1d1d1c', 'White'), preset('#6c6c6a', '#f2f2f0', 'Gray'), preset('#b9bcbf', '#2f3133', 'Steel'), preset('#1d3f8a', '#eef1f6', 'Blue'), preset('#24443a', '#eef2ee', 'Green')));
   secEl('Editing', row('Snap to minute marks', tog(() => doc.snap, v => doc.snap = v)),
     h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => { doc.objs = []; sel = null; GC.clear(); commit(); renderPanel(); scheduleRender(); toast('Cleared. Undo brings it back.'); }}, 'Clear this design'),
       t.panel ? null : h('button', {type:'button', class:'mini', onclick:() => { const u = doc.units, nm = doc.name; const keep = proj.designs; sampleDoc(); doc.units = u; doc.name = nm; keep[proj.cur] = doc; proj.designs = keep; sel = null; GC.clear(); commit(); syncChrome(); renderPanel(); fit(); toast('Sample loaded. Undo goes back.'); }}, 'Load sample dial')));
@@ -1002,6 +1022,7 @@ function openFontPicker(o) {
     const pick = name => { o.font = name; const m = FMAP.get(name); if (m) { if (!m.w.includes(o.wt)) o.wt = m.w.reduce((a, c) => Math.abs(c - o.wt) < Math.abs(a - o.wt) ? c : a, m.w[0]); if (!m.i) o.it = false; } commit(); scheduleRender(); closeSheet(); renderPanel(); };
     const item = (name, cat) => h('button', {type:'button', class:'fitem', 'aria-pressed':String(o.font === name), onclick:() => pick(name)}, h('span', {}, name), h('small', {}, cat));
     const draw = () => { list.replaceChildren(); const s = q.value.trim().toLowerCase(), mine = Object.keys(doc.fonts || {});
+      if (!s) list.append(h('h4', {}, 'Standard · Atkinson Hyperlegible'), ...STD_FONTS.filter(n => FMAP.has(n)).map(n => item(n, n.endsWith('Mono') ? 'Mono · 200–800' : n.endsWith('Next') ? 'Default · 200–800' : 'Original · 400, 700')));
       if (!s && mine.length) list.append(h('h4', {}, 'Your fonts'), ...mine.map(n => item(n, 'Uploaded')));
       const res = s ? FONTS.filter(f => f.f.toLowerCase().includes(s)).slice(0, 150) : PICKS.map(n => FMAP.get(n));
       list.append(h('h4', {}, s ? `${res.length === 150 ? '150+' : res.length} matches` : 'Suggested for dials'), ...res.map(f => item(f.f, CATS[f.c] || '')));
@@ -1038,6 +1059,7 @@ function openExport() {
       X('Job sheet (.pdf)', 'Specs and tolerances, 1:1 artwork, enlarged reference', () => run('Building PDF', () => download(fname('pdf'), new Blob([jobSheetPDF(buildLayers())], {type:'application/pdf'})))),
       X('SVG', 'Engrave, Score, Cut and Bevel layers', () => run('Building SVG', () => download(fname('svg'), svgOut(buildLayers()), 'image/svg+xml'))),
       X('DXF', `R12 polylines in ${doc.units === 'in' ? 'inches' : 'mm'} for EZCAD and CAD`, () => run('Building DXF', () => download(fname('dxf'), dxfOut(buildLayers()), 'application/dxf'))),
+      buildLayers().lume.length ? X('Lume stencil (.svg)', 'Lume areas only, filled, for a lume mask or stencil', () => run('Building stencil', () => { const L = buildLayers(); download(fname('svg').replace('.svg', '-lume-stencil.svg'), svgOut({base:L.lume, score:[], bev:[], cut:[], lume:[], outline:null}), 'image/svg+xml'); })) : null,
       X('Depth map (.png)', `${doc.ex.dpi} dpi grayscale for relief engraving`, () => run('Rendering depth map', async () => download(fname('png').replace('.png', `-depth-${doc.ex.dpi}dpi.png`), new Blob([await depthPNG(buildLayers())], {type:'image/png'})))),
       X('Save project (.json)', 'All designs, vendors and orders in one file', () => run('Saving project', () => download('dial-bench-project.json', projJSON(), 'application/json'))),
       X('Open a project file', 'Replaces everything here (save first if unsure)', () => pickFile('.json,application/json', async f => { try { const j = JSON.parse(await f.text()); const pj = j.proj || (j.doc ? {designs:[j.doc]} : null); if (!pj || !Array.isArray(pj.designs)) throw 0; loadProj(pj); closeSheet(); toast('Project opened'); } catch (e) { toast('That file is not a Dial Bench project.'); } })),
@@ -1142,9 +1164,11 @@ function jobLines(v, st) {
   if (isFinite(sm.line)) L.push(`- Thinnest line: ${inmm(sm.line)}`);
   if (isFinite(sm.text)) L.push(`- Smallest text (cap height): ${inmm(sm.text)}`);
   if (sm.hair) L.push('- Includes hairline score lines (Score layer)');
+  const lumed = doc.objs.filter(o => !o.hid && o.lume && LUME[o.lume]);
+  if (lumed.length) L.push(`- Lume layer: ${lumed.length} element(s) I'll fill with ${lumeNames()}. If you can, engrave them as shallow pockets, 0.002" to 0.004" (0.05 to 0.10 mm) deep.`);
   L.push(['h', 'FILES ATTACHED'], `- ${fname('zip')}: SVG and DXF at 1:1, center at 0,0 (SVG in mm, DXF in ${doc.units === 'in' ? 'inches' : 'mm'}), depth map, readme`, `- ${fname('pdf')}: specs, artwork at 1:1, enlarged reference`);
   L.push(['h', 'QUESTIONS'], job === 'cut' ? '1. What is the thinnest brass you can cut, and your tolerance on it?' : '1. Which laser and lens do you use (fiber, MOPA or UV), and what spot size?',
-    job === 'cut' ? '2. Can you hold ±0.002" (0.05 mm) on a 1.12" part?' : '2. What are the thinnest line and smallest text you can hold on brass?', `3. Price per piece at ${st.qty} and at 25, and turnaround?`, '4. Can you run one test piece first?');
+    job === 'cut' ? '2. Can you hold ±0.002" (0.05 mm) on a 1.12" part?' : '2. What are the thinnest line and smallest text you can hold on brass?', `3. Price per piece at ${st.qty} and at 25, and turnaround?`, '4. Can you run one test piece first?', lumed.length ? '5. Can you also fill the Lume layer with lume, or should I do that myself?' : '');
   L.push(['h', 'DUE'], st.due ? `- ${st.due}` : '- Flexible');
   if (st.notes) L.push(['h', 'NOTES'], st.notes);
   return L.filter(Boolean);
@@ -1278,12 +1302,12 @@ function editOrder(o) {
 /* ================= shop test card ================= */
 function testCardDoc() {
   const keep = doc, tp = doc && doc.kind === 'dial' && doc.tpl !== 'VK67' ? doc.tpl : 'NH36-3H', d = blankDoc(tp); d.name = 'Shop test card'; doc = d;
-  const tx = (s, x, y, hh, al = 'r', font = 'IBM Plex Mono', wt = 500) => add({t:'text', x, y, rot:0, s, font, wt, it:false, h:hh, tr:0.02, al, curve:false, cr:6, ca:0, cx:0, cy:0, inside:false, ...BASE});
+  const tx = (s, x, y, hh, al = 'r', font = 'Atkinson Hyperlegible Mono', wt = 500) => add({t:'text', x, y, rot:0, s, font, wt, it:false, h:hh, tr:0.02, al, curve:false, cr:6, ca:0, cx:0, cy:0, inside:false, ...BASE});
   add({...ringPreset('sec'), r:+stackStart('main').toFixed(4), name:'Seconds track'});
-  tx('SHOP TEST CARD', 0, -11.2, 0.6, 'c', 'Barlow Condensed', 600);
+  tx('SHOP TEST CARD', 0, -11.2, 0.6, 'c', 'Atkinson Hyperlegible Next', 600);
   add({t:'rect', cx:0, cy:-12.55, w:0.45, h:0.9, rot:0, cr:0, ...BASE, name:'12 o’clock mark'});
   [0.002, 0.003, 0.004, 0.005, 0.006, 0.008, 0.010].forEach((w, i) => { const y = -9.4 + i * 1.15; tx(`.${String(Math.round(w * 1000)).padStart(3, '0')}"`, -4.9, y, 0.42); add({t:'rect', cx:-0.2, cy:y, w:7, h:w * 25.4, rot:0, cr:0, ...BASE, name:`Line ${w}"`}); });
-  [0.010, 0.015, 0.020, 0.025, 0.030, 0.040].forEach((c, i) => { const y = 2.4 + i * 1.25; tx(`.${String(Math.round(c * 1000)).padStart(3, '0')}"`, -4.9, y, 0.42); tx('DIAL 0123456789', -4.4, y, c * 25.4, 'l', 'Barlow Condensed', 500); });
+  [0.010, 0.015, 0.020, 0.025, 0.030, 0.040].forEach((c, i) => { const y = 2.4 + i * 1.25; tx(`.${String(Math.round(c * 1000)).padStart(3, '0')}"`, -4.9, y, 0.42); tx('DIAL 0123456789', -4.4, y, c * 25.4, 'l', 'Atkinson Hyperlegible Next', 500); });
   add({t:'rect', cx:6.5, cy:-5.6, w:2, h:2, rot:0, cr:0, ...BASE, bw:0.3, bs:3, name:'Bevel sample'}); tx('BEVEL', 6.5, -4.05, 0.35, 'c');
   add({t:'circle', cx:6.5, cy:-8.7, r:0.8, ...BASE, fill:false, sw:0, name:'Hairline sample'}); tx('HAIRLINE', 6.5, -7.45, 0.35, 'c');
   doc = keep; return d;
@@ -1319,6 +1343,7 @@ function drawArt(P, L, k, cx, cy, guides) {
   P.lw(0.3);
   if (L.score.length) { P.col(0, 0, 1, true); for (const x of L.score) P.polys([x.p], tf, x.c ? 'stroke' : 'open'); }
   if (L.cut.length) { P.col(0.85, 0, 0, true); P.polys(L.cut, tf, 'stroke'); }
+  if (L.lume && L.lume.length) { P.col(0, 0.62, 0.62, true); P.lw(0.5); P.polys(L.lume, tf, 'stroke'); P.lw(0.3); }
   if (guides && !t.panel) {
     P.col(0.85, 0.2, 0.1, true); P.lw(0.5); P.dash('2 1.5');
     if (t.hole) P.polys([circ(0, 0, t.hole / 2)], tf, 'stroke');
@@ -1340,7 +1365,7 @@ function jobSheetPDF(L, vendor, st0) {
     for (const w of wrapText(l, 98)) { if (y < 70) break; P1.t(w.startsWith('- ') || /^\d\./.test(w) ? 58 : 70, y, 9.5, w); y -= 12.5; }
   }
   y -= 8; P1.t(54, y, 10.5, 'LAYERS', true); y -= 14;
-  [['Engrave', 'filled areas (black on page 2)'], ['Score', 'hairlines (blue)'], ['Cut', L.cut.length ? 'part outline / blank cut lines (red)' : 'none'], ...L.bev.map((_, i) => [`Bevel ${i + 1}`, 'inset step, one extra pass (gray)'])]
+  [['Engrave', 'filled areas (black on page 2)'], ['Score', 'hairlines (blue)'], ['Cut', L.cut.length ? 'part outline / blank cut lines (red)' : 'none'], ...(L.lume && L.lume.length ? [['Lume', `areas to fill with ${lumeNames()} (teal outline)`]] : []), ...L.bev.map((_, i) => [`Bevel ${i + 1}`, 'inset step, one extra pass (gray)'])]
     .forEach(([a, c]) => { if (y > 70) { P1.t(58, y, 9.5, `${a}: ${c}`); y -= 12.5; } });
   P1.t(54, 48, 8.5, `${me.name || ''}${me.phone ? '  ·  ' + me.phone : ''}${me.email ? '  ·  ' + me.email : ''}`);
   P1.t(430, 48, 8.5, 'Page 1 of 3  ·  Dial Bench');
@@ -1352,7 +1377,7 @@ function jobSheetPDF(L, vendor, st0) {
   if (!t.panel) { P2.col(0, 0, 0); P2.t(cx2 - 6, cy2 + (Hmm / 2) * k2 + 14, 9, '12', true); P2.t(cx2 + (Wmm / 2) * k2 + 10, cy2 - 3, 9, 'CROWN', true); }
   const by = 110, bx = 306 - 36; P2.col(0, 0, 0, true); P2.lw(1); P2.line(bx, by, bx + 72, by); for (let i = 0; i <= 10; i++) P2.line(bx + i * 7.2, by, bx + i * 7.2, by + (i % 5 ? 4 : 8));
   P2.col(0, 0, 0); P2.t(bx + 12, by - 14, 9, '1.000 in = 25.40 mm');
-  P2.t(54, 48, 8.5, 'Center crosshair = 0,0. Black = Engrave, blue = Score, red = Cut, gray = Bevel steps, dashed = reference only.'); P2.t(430, 30, 8.5, 'Page 2 of 3  ·  Dial Bench');
+  P2.t(54, 48, 8.5, 'Center crosshair = 0,0. Black = Engrave, blue = Score, red = Cut, gray = Bevel, teal = Lume, dashed = reference.'); P2.t(430, 30, 8.5, 'Page 2 of 3  ·  Dial Bench');
   // page 3: enlarged reference
   const P3 = pg(), k3 = Math.min(504 / Wmm, 520 / Hmm), cy3 = 450;
   P3.col(0, 0, 0); P3.t(54, 744, 14, `ENLARGED REFERENCE (${(k3 / mmpt).toFixed(1)}:1). DO NOT SCALE FROM THIS PAGE.`, true);
