@@ -44,6 +44,8 @@ const ACI = [3,2,30,4,6,9,11,40,150,210,90,1];
 const $ = (q, r = document) => r.querySelector(q);
 const h = (t, a = {}, ...k) => { const e = document.createElement(t); for (const [n, v] of Object.entries(a || {})) { if (v == null || v === false) continue; if (n.startsWith('on')) e.addEventListener(n.slice(2), v); else if (n === 'class') e.className = v; else if (n === 'style') e.style.cssText = v; else e.setAttribute(n, v === true ? '' : v); } for (const c of k.flat()) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); } return e; };
 const NS = 'http://www.w3.org/2000/svg';
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const sv = (t, a = {}) => { const e = document.createElementNS(NS, t); for (const [n, v] of Object.entries(a)) { if (v == null) continue; if (typeof v === 'string' && v.startsWith('var(')) e.style.setProperty(n, v); else e.setAttribute(n, v); } return e; };
 const D2R = Math.PI / 180;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -716,7 +718,8 @@ function dxfOut(L) {
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
 const crc32 = (u, c = 0xFFFFFFFF) => { for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
 async function depthPNG(L) {
-  const b = bnds(), W = b[2] - b[0], H = b[3] - b[1], dpi = doc.ex.dpi || 1000, k = dpi / 25.4, NX = Math.round(W * k), NY = Math.round(H * k), inv = doc.ex.inv;
+  const b = bnds(), W = b[2] - b[0], H = b[3] - b[1], cap = IOS ? 16e6 : 120e6, d0 = doc.ex.dpi || 1000, px0 = (W * d0 / 25.4) * (H * d0 / 25.4), dpi = px0 > cap ? Math.floor(d0 * Math.sqrt(cap / px0)) : d0, k = dpi / 25.4, NX = Math.round(W * k), NY = Math.round(H * k), inv = doc.ex.inv;
+  if (dpi < d0) toast(`Depth map made at ${dpi} dpi, the most this device can draw at this size.`);
   const c = document.createElement('canvas'); c.width = NX; c.height = NY; const g = c.getContext('2d');
   g.fillStyle = inv ? '#000' : '#fff'; g.fillRect(0, 0, NX, NY); g.setTransform(k, 0, 0, k, -b[0] * k, -b[1] * k);
   const pp = (L.paint || []).flatMap(g => g.ps), pk = (!L.sand && L.lume && L.lume.length) || pp.length, maxL = 1 + L.bev.length + (pk ? 1 : 0), gray = l => { let v = Math.round(255 * (1 - l / maxL)); if (inv) v = 255 - v; return `rgb(${v},${v},${v})`; };
@@ -750,9 +753,22 @@ function readme(L) {
     ...L.bev.map((_, i) => `  Bevel_${i + 1}: bevel step ${i + 1}, inset further from each edge. One extra pass per step after Engrave.`),
     L.outline ? '  Dial_outline: alignment only, do not engrave' : '', '', 'Text, icons and logos are vector outlines. No fonts are needed.'].filter(x => x !== '').join('\n');
 }
+function anchorSave(name, blob) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); toast('Saved ' + name);
+}
+let saveQ = [], saveQT = 0;
 function download(name, data, type = 'application/octet-stream') {
-  const blob = data instanceof Blob ? data : new Blob([data], {type}), a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); toast('Saved ' + name);
+  const blob = data instanceof Blob ? data : new Blob([data], {type});
+  if (IOS && navigator.canShare) { const f = new File([blob], name, {type:blob.type || type}); try { if (navigator.canShare({files:[f]})) { saveQ.push(f); clearTimeout(saveQT); saveQT = setTimeout(showSave, 40); return; } } catch (e) {} }
+  anchorSave(name, blob);
+}
+function showSave() {
+  const files = saveQ; saveQ = []; if (!files.length) return;
+  sheet(files.length > 1 ? `${files.length} files ready` : 'File ready', b => b.append(
+    h('p', {class:'muted', style:'margin:0'}, files.map(f => f.name).join(' · ')),
+    h('button', {type:'button', class:'xrow primary', onclick:async () => { try { await navigator.share({files}); closeSheet(); toast('Done'); } catch (e) { if (e && e.name !== 'AbortError') toast('Could not open the share sheet: ' + (e.message || e)); } }},
+      h('b', {}, 'Save to Files or share'), h('small', {}, 'Pick Save to Files, AirDrop to your computer, or send to an app.')),
+    h('button', {type:'button', class:'xrow', onclick:() => { for (const f of files) anchorSave(f.name, f); closeSheet(); }}, h('b', {}, 'Download instead'), h('small', {}, 'Saves to Safari’s Downloads folder'))));
 }
 const slugN = s => String(s || 'design').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'design';
 const fname = ext => `${slugN(doc.kind === 'panel' ? doc.name : doc.name === 'Dial design' ? T().mv + '-' + (T().short || 'chrono') : doc.name)}.${ext}`;
@@ -782,6 +798,7 @@ function setTool(k) {
   renderPanel(); scheduleRender();
 }
 function toolClick(k) {
+  if (k === 'img') { pickFile('image/png,image/svg+xml,image/jpeg,image/webp', f => readImage(f, id => { const o = add({t:'img', x:0, y:T().panel ? 0 : 5, rot:0, w:4, img:id, th:0.5, inv:false, ...BASE}); commit(); select(o.id); toast('Logo added. Drag it into place.'); })); return; }
   if (k === 'mk') { const o = add(mkPreset()); const st = stackOf('main'), prev = st[st.indexOf(o) - 1]; o.r = prev ? +(prev.mode === 'furn' ? prev.r : prev.r - ringWidth(prev) - doc.gap).toFixed(4) : stackStart('main'); commit(); select(o.id); return; }
   setTool(k);
 }
@@ -843,6 +860,15 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape') { if (tool !== 'sel') setTool('sel'); else select(null); }
 });
 new ResizeObserver(() => { if (view.fitted) fit(); else scheduleRender(); }).observe($('#stage'));
+if (window.visualViewport) { const vv = visualViewport, app = $('#app'); let kbOn = false;
+  const fitVV = () => { const kb = innerHeight - vv.height > 120; if (kb !== kbOn || kb) { kbOn = kb; app.style.height = kb ? vv.height + 'px' : ''; window.scrollTo(0, 0); sheetTo(sheetMode, false); } };
+  vv.addEventListener('resize', fitVV); vv.addEventListener('scroll', () => { if (kbOn) window.scrollTo(0, 0); }); }
+document.addEventListener('focusin', e => { const t = e.target; if (t.matches && t.matches('#pb input,#pb select,#pb textarea')) setTimeout(() => t.scrollIntoView({block:'center', behavior:'smooth'}), 350); });
+document.addEventListener('gesturestart', e => e.preventDefault());
+let gz = null;
+svg.addEventListener('gesturestart', e => { e.preventDefault(); gz = ptr.size >= 2 ? null : view.w; });
+svg.addEventListener('gesturechange', e => { e.preventDefault(); if (gz == null || ptr.size >= 2) return; view.w = clamp(gz / e.scale, 1.5, 120); view.fitted = false; scheduleRender(); });
+svg.addEventListener('gestureend', () => { gz = null; });
 
 /* ================= UI: inspector ================= */
 const pb = $('#pb'); let fields = [], pbKey = '', secHost = null;
@@ -1160,6 +1186,7 @@ function openMore() {
         t.panel ? null : h('button', {type:'button', class:'mini', onclick:() => { const u = doc.units, nm = doc.name; const keep = proj.designs; sampleDoc(); doc.units = u; doc.name = nm; keep[proj.cur] = doc; proj.designs = keep; sel = null; GC.clear(); commit(); closeSheet(); syncChrome(); renderPanel(); fit(); toast('Sample loaded. Undo goes back.'); }}, 'Load sample dial')));
     secEl('Files', h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => openExport()}, 'Exports and project file…')));
     const off = h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Fonts you use are saved on this phone automatically. To have all 1,892 ready offline, download the full library once (about 97 MB).');
+    if (IOS && !STANDALONE) secEl('Install on iPad', h('p', {class:'muted', style:'margin:0;font-size:14px'}, 'In Safari, tap Share (it may be inside the ••• menu), then Add to Home Screen. Installed, Dial Bench opens full screen, works offline and keeps your designs saved.'));
     secEl('App', installEvt ? h('button', {type:'button', class:'btn primary', onclick:async () => { installEvt.prompt(); await installEvt.userChoice; installEvt = null; closeSheet(); }}, 'Install Dial Bench on this phone') : null,
       off, h('button', {type:'button', class:'btn', onclick:e => cacheAllFonts(e.currentTarget)}, 'Download full font library for offline'),
       h('p', {class:'src', style:'margin:0'}, 'Fonts: Google Fonts (SIL Open Font License / Apache 2.0). Icons: Material Symbols by Google (Apache 2.0). Hands and case in the preview are generic shapes drawn by Dial Bench.'));
@@ -1359,7 +1386,11 @@ function openSend(vid) {
   const okV = vendorsFor(); if (!okV.length) { toast('Add a vendor for this kind of design in the Order step first.'); return; }
   let v0 = vid || proj.lastVendor || 'salt'; if (!okV.some(x => x.id === v0)) { if (vid) toast(`${vById(vid).name} is set up for ${USES[vById(vid).use].toLowerCase()}, not this design.`); v0 = okV[0].id; }
   const st = {vid:v0, qty:doc.name === 'Shop test card' ? 1 : 5, due:'', supplied:true, job:null, notes:'', edited:false, to:'', subject:'', body:''};
-  let issues = [];
+  let issues = [], pre = {key:'', files:null, busy:false};
+  const fKey = () => JSON.stringify([st.vid, st.qty, st.due, st.supplied, st.job, st.notes, last.length, last.slice(-200)]);
+  const updShare = () => { const s = $('#shareBtn small'); if (s) s.textContent = pre.files && pre.key === fKey() ? 'Opens the share sheet. Pick Mail or Gmail and the files are attached.' : 'Preparing files…'; };
+  const prep = async () => { const k = fKey(); if (pre.key === k && (pre.files || pre.busy)) return updShare(); pre = {key:k, files:null, busy:true}; updShare();
+    try { const f = await vendorFiles(vById(st.vid), st); if (pre.key === k) pre = {key:k, files:f, busy:false}; } catch (e) { pre = {key:'', files:null, busy:false}; } updShare(); };
   sheet('Send to vendor', b => {
     const draw = () => {
       const v = vById(st.vid); st.job = st.job || v.job; issues = preflight(v);
@@ -1384,10 +1415,11 @@ function openSend(vid) {
           h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:re}, 'Rebuild email'), h('button', {type:'button', class:'mini', onclick:() => copyText(`${st.subject}\n\n${st.body}`)}, 'Copy email'),
             (proj.me && proj.me.name) ? null : h('span', {class:'muted', style:'font-size:13px'}, 'Add your name and phone in Order → Your contact so they sign the email.'))),
         h('div', {style:'display:grid;gap:8px'},
-          h('button', {type:'button', class:'xrow primary', onclick:() => sendShare(v, st)}, h('b', {}, 'Share files + email'), h('small', {}, 'Opens your phone’s share sheet. Pick Gmail and the files are attached.')),
+          h('button', {type:'button', class:'xrow primary', id:'shareBtn', onclick:() => { if (pre.files && pre.key === fKey()) shareNow(v, st, pre.files); else { prep(); toast('Preparing files. Tap again in a moment.'); } }}, h('b', {}, 'Share files + email'), h('small', {}, 'Preparing files…')),
           h('button', {type:'button', class:'xrow', onclick:() => sendMailto(v, st)}, h('b', {}, 'Open email app'), h('small', {}, 'Fills in the email and saves the files so you can attach them')),
           h('button', {type:'button', class:'xrow', onclick:async () => { const f = await vendorFiles(v, st); f.forEach(x => download(x.name, x)); }}, h('b', {}, 'Download files only'), h('small', {}, `${fname('zip')} and ${fname('pdf')}`)),
           h('button', {type:'button', class:'xrow', onclick:() => { logOrder(v, st); closeSheet(); }}, h('b', {}, 'Log this order'), h('small', {}, 'Adds it to the order log so you can track cost and turnaround'))));
+      setTimeout(prep, 60);
     };
     draw();
   });
@@ -1403,12 +1435,11 @@ async function vendorFiles(v, st) {
   doc.ex.prof = prev;
   return [new File([z], fname('zip'), {type:'application/zip'}), new File([pdf], fname('pdf'), {type:'application/pdf'})];
 }
-async function sendShare(v, st) {
-  try {
-    const files = await vendorFiles(v, st), data = {files, title:st.subject, text:(st.to ? `To: ${st.to}\n` : '') + st.body};
-    if (navigator.canShare && navigator.canShare({files})) { await navigator.share(data); askLog(v, st); }
-    else { toast('Sharing files is not supported here. Opening email instead.'); sendMailto(v, st, files); }
-  } catch (e) { if (e && e.name !== 'AbortError') toast('Share failed: ' + (e.message || e)); }
+function shareNow(v, st, files) {
+  const data = {files, title:st.subject, text:(st.to ? `To: ${st.to}\n` : '') + st.body};
+  let ok = false; try { ok = !!(navigator.canShare && navigator.canShare({files})); } catch (e) {}
+  if (!ok) { toast('Sharing files is not supported here. Opening email instead.'); sendMailto(v, st, files); return; }
+  navigator.share(data).then(() => askLog(v, st), e => { if (e && e.name !== 'AbortError') toast('Share failed: ' + (e.message || e)); });
 }
 async function sendMailto(v, st, files) {
   files = files || await vendorFiles(v, st); files.forEach(f => download(f.name, f));
@@ -1796,7 +1827,9 @@ async function boot() {
   let sm = 'half'; try { sm = localStorage.getItem('db.sheet') || 'half'; } catch (e) {} sheetTo(sm, false);
   requestAnimationFrame(fit); loadFontIndex();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  if (IOS && !STANDALONE) { let seen = null; try { seen = localStorage.getItem('db.iosHint'); localStorage.setItem('db.iosHint', '1'); } catch (e) {} if (!seen) setTimeout(() => toast('To install: Safari Share → Add to Home Screen'), 1500); }
 }
-if (location.hostname === 'localhost') window.__db = {buildLayers, svgOut, dxfOut, depthPNG, zip, readme, jobSheetPDF, preflight, get doc() { return doc; }, get proj() { return proj; }, geomOf, switchDesign, newDesign, select, goStep, setTool, sheetTo, runCheck, get step() { return step; }, get etab() { return etab; }};
+if (location.hostname === 'localhost') window.__db = {buildLayers, svgOut, dxfOut, depthPNG, zip, readme, jobSheetPDF, preflight, get doc() { return doc; }, get proj() { return proj; }, geomOf, switchDesign, newDesign, select, goStep, download, get IOS() { return IOS; }, setTool, sheetTo, runCheck, get step() { return step; }, get etab() { return etab; }};
 boot();
 })();
