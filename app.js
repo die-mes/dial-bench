@@ -687,6 +687,7 @@ function buildLayers() {
 const PROF = {lb:{n:'LightBurn palette', eng:'#000000', score:'#0000FF', cut:'#FF0000'}, ponoko:{n:'Ponoko colors (gray fill engrave, red line engrave, blue cut)', eng:'#808080', score:'#FF0000', cut:'#0000FF'}};
 const BEVC = [3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15], bevCol = i => LB_PAL[BEVC[i % BEVC.length]], LUMEC = LB_PAL[6];
 function svgOut(L, prof = doc.ex.prof || 'lb') {
+  if (doc.kind !== 'panel') prof = 'lb';
   const t = T(), b = bnds(), W = b[2] - b[0], H = b[3] - b[1], c = PROF[prof] || PROF.lb, f = v => +v.toFixed(4), P = (ps, cl = true) => ps.map(p => 'M' + p.map(q => f(q[0]) + ' ' + f(q[1])).join(' L') + (cl ? ' Z' : '')).join(' ');
   let s = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}mm" height="${f(H)}mm" viewBox="${f(b[0])} ${f(b[1])} ${f(W)} ${f(H)}">\n<!-- Dial Bench: ${t.panel ? doc.name : t.mv + ' ' + t.lbl}. 1:1 scale, units mm, center at 0,0. Colors: ${c.n}. -->\n`;
   if (L.base.length) s += `<g id="Engrave" fill="${c.eng}" stroke="none" fill-rule="evenodd"><path d="${P(L.base)}"/></g>\n`;
@@ -969,13 +970,16 @@ function switchDesign(i) { proj.cur = clamp(i, 0, proj.designs.length - 1); doc 
 let installEvt = null; window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (tab === 'tpl') renderPanel(); });
 function pTpl() {
   const t = T();
-  secEl('Designs', h('div', {class:'list'}, proj.designs.map((d, i) => h('div', {class:'li' + (i === proj.cur ? ' on' : '')},
+  const dRow = (d, i) => h('div', {class:'li' + (i === proj.cur ? ' on' : '')},
       h('button', {type:'button', class:'nm', onclick:() => switchDesign(i)}, d.name, h('small', {}, d.kind === 'panel' ? `${fmtL(d.panel.w)} × ${fmtL(d.panel.h)}` : (TPL[d.tpl] || {}).mv)),
       h('button', {type:'button', class:'sq', 'aria-label':'Duplicate design', onclick:() => { const c = JSON.parse(JSON.stringify(d)); c.name = d.name + ' copy'; proj.designs.push(c); switchDesign(proj.designs.length - 1); }}, '⧉'),
-      proj.designs.length > 1 ? h('button', {type:'button', class:'sq', 'aria-label':'Delete design', onclick:() => { proj.designs.splice(i, 1); switchDesign(Math.min(proj.cur, proj.designs.length - 1)); toast(`Deleted ${d.name}`); }}, '✕') : null))),
-    row('Name', txt(() => doc.name, v => { doc.name = v; syncChrome(); })),
-    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => newDesign('dial')}, '+ Dial'), h('button', {type:'button', class:'mini', onclick:() => newDesign('pouch')}, '+ Leather pouch flap'),
-      h('button', {type:'button', class:'mini', onclick:() => newDesign('box')}, '+ Wood box lid'), h('button', {type:'button', class:'mini', onclick:() => newDesign('custom')}, '+ Custom panel'), h('button', {type:'button', class:'mini', onclick:() => newDesign('test')}, '+ Shop test card')));
+      proj.designs.length > 1 ? h('button', {type:'button', class:'sq', 'aria-label':'Delete design', onclick:() => { proj.designs.splice(i, 1); switchDesign(Math.min(proj.cur, proj.designs.length - 1)); toast(`Deleted ${d.name}`); }}, '✕') : null);
+  const all = proj.designs.map((d, i) => [d, i]);
+  secEl('Dial designs', h('div', {class:'list'}, all.filter(([d]) => d.kind !== 'panel').map(([d, i]) => dRow(d, i))),
+    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => newDesign('dial')}, '+ Dial'), h('button', {type:'button', class:'mini', onclick:() => newDesign('test')}, '+ Shop test card'), h('button', {type:'button', class:'mini', onclick:() => newDesign('lumetest')}, '+ Lume test card')));
+  secEl('Accessories (pouches, boxes)', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Separate products. Leather and wood live here, never on a dial.'), h('div', {class:'list'}, all.filter(([d]) => d.kind === 'panel').map(([d, i]) => dRow(d, i))),
+    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => newDesign('pouch')}, '+ Leather pouch flap'), h('button', {type:'button', class:'mini', onclick:() => newDesign('box')}, '+ Wood box lid'), h('button', {type:'button', class:'mini', onclick:() => newDesign('custom')}, '+ Custom panel')));
+  secEl(t.panel ? 'This accessory' : 'This dial', row('Name', txt(() => doc.name, v => { doc.name = v; syncChrome(); })));
   if (t.panel) {
     const P = doc.panel, rp = () => { gkeyLast = ''; };
     secEl('Panel', row('Width', num(() => P.w, v => { P.w = Math.max(1, v); rp(); }), UL()), row('Height', num(() => P.h, v => { P.h = Math.max(1, v); rp(); }), UL()),
@@ -1072,7 +1076,7 @@ function openExport() {
       X('Save project (.json)', 'All designs, vendors and orders in one file', () => run('Saving project', () => download('dial-bench-project.json', projJSON(), 'application/json'))),
       X('Open a project file', 'Replaces everything here (save first if unsure)', () => pickFile('.json,application/json', async f => { try { const j = JSON.parse(await f.text()); const pj = j.proj || (j.doc ? {designs:[j.doc]} : null); if (!pj || !Array.isArray(pj.designs)) throw 0; loadProj(pj); closeSheet(); toast('Project opened'); } catch (e) { toast('That file is not a Dial Bench project.'); } })),
       h('section', {class:'sec'}, h('h3', {}, 'Options'),
-        row('Color scheme', choose(() => doc.ex.prof || 'lb', v => doc.ex.prof = v, [['lb', 'LightBurn / most shops'], ['ponoko', 'Ponoko']], false)),
+        t.panel ? row('Color scheme', choose(() => doc.ex.prof || 'lb', v => doc.ex.prof = v, [['lb', 'LightBurn / most shops'], ['ponoko', 'Ponoko']], false)) : null,
         t.panel ? null : row('Cut lines (blank)', tog(() => doc.ex.cut, v => doc.ex.cut = v)), t.panel ? null : h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Adds the dial outline, center hole and windows on a Cut layer, for a shop cutting dial blanks.'),
         t.panel ? null : row('Dial outline layer', tog(() => doc.ex.outline, v => doc.ex.outline = v)),
         row('Depth map dpi', choose(() => doc.ex.dpi, v => doc.ex.dpi = v, [[600, '600'], [1000, '1000'], [1500, '1500'], [2000, '2000']], false)),
@@ -1082,26 +1086,30 @@ function openExport() {
 
 /* ================= vendors ================= */
 const VENDORS0 = [
-  {id:'microform', name:'Microform Precision', where:'Sacramento, CA 95834 · local', email:'quote@mform.com', phone:'(916) 419-0580', web:'https://www.mform.com/', job:'cut', prof:'lb', minLine:0, minText:0,
+  {id:'microform', use:'dial', name:'Microform Precision', where:'Sacramento, CA 95834 · local', email:'quote@mform.com', phone:'(916) 419-0580', web:'https://www.mform.com/', job:'cut', prof:'lb', minLine:0, minText:0,
     does:'Fiber and CO2 laser cutting. Lists brass. Engraving is not listed. Ask for their thinnest brass gauge and tolerance.'},
-  {id:'salt', name:'Salt Engineering & Laser Marking', where:'Carmichael, CA · local', email:'info@salt-engineering.com', phone:'(408) 410-6063', web:'https://salt-engineering.com/', job:'engrave', prof:'lb', minLine:0.05, minText:0.4, assumed:true,
+  {id:'salt', use:'dial', name:'Salt Engineering & Laser Marking', where:'Carmichael, CA · local', email:'info@salt-engineering.com', phone:'(408) 410-6063', web:'https://salt-engineering.com/', job:'engrave', prof:'lb', minLine:0.05, minText:0.4, assumed:true,
     does:'Laser marking on metal, precision machining, fixtures. Accepts DXF and PDF. Laser type not listed.'},
-  {id:'brand22', name:'Brand22', where:'Los Angeles, CA · mail-in', email:'orders@brand22.com', phone:'', web:'https://www.brand22.com/', job:'engrave', prof:'lb', minLine:0.05, minText:0.4, assumed:true,
+  {id:'brand22', use:'dial', name:'Brand22', where:'Los Angeles, CA · mail-in', email:'orders@brand22.com', phone:'', web:'https://www.brand22.com/', job:'engrave', prof:'lb', minLine:0.05, minText:0.4, assumed:true,
     does:'Fiber laser marking on brass and other metals. Mail-in nationwide, no minimum, often 24–48 h.'},
-  {id:'pg', name:'Personal Graphics', where:'Petoskey, MI · ships nationwide', email:'', phone:'', web:'https://personalgraphicsonline.com/pages/laser-engraving-services', job:'engrave', prof:'lb', minLine:0.05, minText:0.4, assumed:true,
+  {id:'pg', use:'both', name:'Personal Graphics', where:'Petoskey, MI · ships nationwide', email:'', phone:'', web:'https://personalgraphicsonline.com/pages/laser-engraving-services', job:'engrave', prof:'lb', minLine:0.05, minText:0.4, assumed:true,
     does:'Laser engraving, no minimum. Wants AI, EPS, SVG or PDF. Confirm mail-in parts and brass.'},
-  {id:'ponoko', name:'Ponoko', where:'Bay Area · online upload', email:'', phone:'', web:'https://www.ponoko.com/laser-cutting/leather', job:'both', prof:'ponoko', minLine:1.016, minText:1.016,
+  {id:'ponoko', use:'acc', name:'Ponoko', where:'Bay Area · online upload', email:'', phone:'', web:'https://www.ponoko.com/laser-cutting/leather', job:'both', prof:'ponoko', minLine:1.016, minText:1.016,
     does:'Leather up to 0.1" thick, cut and engraved in one pass, from $50. Upload the SVG on their site. Minimums shown are from their brass page (0.04").'},
-  {id:'sierra', name:'Sierra Etch Laser Art & Engraving', where:'Rocklin, CA · local', email:'', phone:'(916) 413-2180', web:'', job:'both', prof:'lb', minLine:0, minText:0,
+  {id:'sierra', use:'acc', name:'Sierra Etch Laser Art & Engraving', where:'Rocklin, CA · local', email:'', phone:'(916) 413-2180', web:'', job:'both', prof:'lb', minLine:0, minText:0,
     does:'Wood, glass and gift boxes. Ask about leather and metal.'},
-  {id:'castro', name:'Jake Castro (leather)', where:'Sacramento, CA · local', email:'', phone:'(214) 789-4213', web:'', job:'both', prof:'lb', minLine:0, minText:0,
+  {id:'castro', use:'acc', name:'Jake Castro (leather)', where:'Sacramento, CA · local', email:'', phone:'(214) 789-4213', web:'', job:'both', prof:'lb', minLine:0, minText:0,
     does:'Leather goods with laser etching. Ask about custom watch pouches.'}
 ];
 function mergeVendors() {
   proj.vendors = proj.vendors || []; proj.orders = proj.orders || []; proj.me = proj.me || {}; proj.tol = {pos:0.05, rot:0.5, panel:0.25, ...(proj.tol || {})};
-  for (const v of VENDORS0) if (!proj.vendors.some(x => x.id === v.id)) proj.vendors.push({...v});
+  for (const v of VENDORS0) { const x = proj.vendors.find(y => y.id === v.id); if (!x) proj.vendors.push({...v}); else if (!x.use) x.use = v.use; }
+  for (const x of proj.vendors) if (!x.use) x.use = 'both';
 }
 const vById = id => proj.vendors.find(v => v.id === id) || proj.vendors[0];
+const USES = {dial:'Dials', acc:'Accessories (leather, wood)', both:'Dials and accessories'};
+const fitsDesign = (v, d = doc) => v.use === 'both' || v.use === (d.kind === 'panel' ? 'acc' : 'dial');
+const vendorsFor = (d = doc) => proj.vendors.filter(v => fitsDesign(v, d));
 const JOBS = {engrave:'Engrave', cut:'Cut blanks', both:'Cut + engrave'};
 const ORDER_ST = ['Quote requested', 'Ordered', 'Received', 'Cancelled'];
 const today = () => new Date().toISOString().slice(0, 10);
@@ -1196,7 +1204,9 @@ function emailFor(v, st) {
 
 /* ================= send sheet ================= */
 function openSend(vid) {
-  const st = {vid:vid || proj.lastVendor || 'salt', qty:doc.name === 'Shop test card' ? 1 : 5, due:'', supplied:true, job:null, notes:'', edited:false, to:'', subject:'', body:''};
+  const okV = vendorsFor(); if (!okV.length) { toast('Add a vendor for this kind of design in the Order tab first.'); return; }
+  let v0 = vid || proj.lastVendor || 'salt'; if (!okV.some(x => x.id === v0)) { if (vid) toast(`${vById(vid).name} is set up for ${USES[vById(vid).use].toLowerCase()}, not this design.`); v0 = okV[0].id; }
+  const st = {vid:v0, qty:doc.name === 'Shop test card' ? 1 : 5, due:'', supplied:true, job:null, notes:'', edited:false, to:'', subject:'', body:''};
   let issues = [];
   sheet('Send to vendor', b => {
     const draw = () => {
@@ -1212,7 +1222,7 @@ function openSend(vid) {
       const notes = h('input', {type:'text', id:'sendNotes', value:st.notes, placeholder:'Optional'}); notes.addEventListener('change', () => { st.notes = notes.value; re(); });
       b.replaceChildren(
         h('section', {class:'sec'}, h('h3', {}, 'Vendor'),
-          row('Vendor', (() => { const s = h('select', {}, proj.vendors.map(x => h('option', {value:x.id}, x.name))); s.value = st.vid; s.onchange = () => { st.vid = s.value; st.job = null; proj.lastVendor = s.value; persist(); re(); }; return s; })()),
+          row('Vendor', (() => { const s = h('select', {}, vendorsFor().map(x => h('option', {value:x.id}, x.name))); s.value = st.vid; s.onchange = () => { st.vid = s.value; st.job = null; proj.lastVendor = s.value; persist(); re(); }; return s; })()),
           h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${v.where}. ${v.does}`), contactLine(v)),
         h('section', {class:'sec'}, h('h3', {}, 'Job'), h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Design: ${doc.name}. Switch designs in the Design tab.`),
           row('Work', (() => { const d = h('div', {class:'seg'}); for (const [k, l] of Object.entries(JOBS)) d.append(h('button', {type:'button', 'aria-pressed':String(st.job === k), onclick:() => { st.job = k; re(); }}, l)); return d; })()),
@@ -1269,9 +1279,10 @@ function pOrder() {
     row('Panels (leather, wood)', num(() => T_.panel, v => T_.panel = Math.max(0, v)), '±' + UL()));
   const me = proj.me, mt = (l, k, type = 'text') => { const el = h('input', {type, value:me[k] || '', autocomplete:'on'}); el.addEventListener('change', () => { me[k] = el.value; persist(); }); return row(l, el); };
   secEl('Your contact (signs the emails)', mt('Name', 'name'), mt('Business', 'company'), mt('Phone', 'phone', 'tel'), mt('Email', 'email', 'email'));
-  secEl('Vendors', h('div', {class:'list'}, proj.vendors.map(v => h('div', {class:'li'}, h('button', {type:'button', class:'nm', onclick:() => editVendor(v)}, v.name, h('small', {}, v.where)),
-      h('button', {type:'button', class:'mini', onclick:() => openSend(v.id)}, 'Send')))),
-    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => { const v = {id:'v' + Date.now(), name:'New vendor', where:'', email:'', phone:'', web:'', job:'engrave', prof:'lb', minLine:0, minText:0, does:''}; proj.vendors.push(v); persist(); editVendor(v); }}, '+ Add vendor'),
+  const vrow = v => h('div', {class:'li'}, h('button', {type:'button', class:'nm', onclick:() => editVendor(v)}, v.name, h('small', {}, v.where)), fitsDesign(v) ? h('button', {type:'button', class:'mini', onclick:() => openSend(v.id)}, 'Send') : null);
+  secEl('Dial vendors', h('div', {class:'list'}, proj.vendors.filter(v => v.use !== 'acc').map(vrow)));
+  secEl('Accessory vendors (leather, wood)', h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'For pouches and boxes only. They never appear when sending a dial.'), h('div', {class:'list'}, proj.vendors.filter(v => v.use === 'acc').map(vrow)),
+    h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => { const v = {id:'v' + Date.now(), name:'New vendor', use:doc.kind === 'panel' ? 'acc' : 'dial', where:'', email:'', phone:'', web:'', job:'engrave', prof:'lb', minLine:0, minText:0, does:''}; proj.vendors.push(v); persist(); editVendor(v); }}, '+ Add vendor'),
       h('button', {type:'button', class:'mini', onclick:() => { newDesign('test'); toast('Test card added. Send it to each shop first.'); }}, '+ Shop test card'),
       h('button', {type:'button', class:'mini', onclick:() => { newDesign('lumetest'); toast('Lume test card added.'); }}, '+ Lume test card')));
   const os = proj.orders;
@@ -1291,6 +1302,7 @@ function editVendor(v) {
     const f = (l, k, type = 'text') => { const el = h('input', {type, value:v[k] || ''}); el.addEventListener('change', () => { v[k] = el.value; persist(); }); return row(l, el); };
     const lens = (l, k) => row(l, num(() => v[k] || 0, x => { v[k] = Math.max(0, x); v.assumed = false; persist(); }), UL());
     b.append(contactLine(v), f('Name', 'name'), f('Where', 'where'), f('Email', 'email', 'email'), f('Phone', 'phone', 'tel'), f('Website', 'web', 'url'),
+      row('Used for', (() => { const s = h('select', {}, Object.entries(USES).map(([k, l]) => h('option', {value:k}, l))); s.value = v.use || 'both'; s.onchange = () => { v.use = s.value; persist(); }; return s; })()),
       row('Usual work', (() => { const s = h('select', {}, Object.entries(JOBS).map(([k, l]) => h('option', {value:k}, l))); s.value = v.job; s.onchange = () => { v.job = s.value; persist(); }; return s; })()),
       row('File colors', (() => { const s = h('select', {}, h('option', {value:'lb'}, 'LightBurn / most shops'), h('option', {value:'ponoko'}, 'Ponoko')); s.value = v.prof || 'lb'; s.onchange = () => { v.prof = s.value; persist(); }; return s; })()),
       lens('Thinnest line', 'minLine'), lens('Smallest text', 'minText'),
