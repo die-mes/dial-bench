@@ -557,6 +557,7 @@ function scaleRot(o0, f, da) {
 const ptr = new Map(); let act = null, spl = [];
 const hitId = e => { const g = e.target && e.target.closest ? e.target.closest('[data-id]') : null; return g ? +g.dataset.id : null; };
 svg.addEventListener('pointerdown', e => {
+  const ae = document.activeElement; if (ae && ae.matches && ae.matches('input,textarea,select')) ae.blur();
   svg.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]);
   if (ptr.size === 2) {
     if (act && act.kind === 'draw') { doc.objs = doc.objs.filter(o => o !== act.o); sel = null; }
@@ -638,7 +639,7 @@ $('#splBar').addEventListener('click', e => { const a = e.target.closest('button
   $('#splBar').hidden = !spl.length; scheduleRender(); });
 function placeAt(m) {
   const p = snapC(m);
-  if (tool === 'text') { const r = Math.hypot(...p), a = angOf(p); const o = add({t:'text', x:p[0], y:p[1], rot:0, s:'TEXT', font:'Atkinson Hyperlegible Next', wt:500, it:false, h:0.7, tr:0.05, al:'c', curve:false, cr:+Math.max(1, r).toFixed(3), ca:+a.toFixed(2), cx:0, cy:0, inside:a > 90 && a < 270, ...BASE}); commit(); setTool('sel'); select(o.id); setTimeout(() => { const i = $('#f_text'); if (i) { i.focus(); i.select(); } }, 60); }
+  if (tool === 'text') { const r = Math.hypot(...p), a = angOf(p); const o = add({t:'text', x:p[0], y:p[1], rot:0, s:'TEXT', font:'Atkinson Hyperlegible Next', wt:500, it:false, h:0.7, tr:0.05, al:'c', curve:false, cr:+Math.max(1, r).toFixed(3), ca:+a.toFixed(2), cx:0, cy:0, inside:a > 90 && a < 270, ...BASE}); commit(); setTool('sel'); select(o.id); }
   if (tool === 'icon') openIconPicker(null, (name, st) => { const o = add({t:'icon', x:p[0], y:p[1], rot:0, name, ...st, sz:2, ...BASE}); commit(); setTool('sel'); select(o.id); });
   if (tool === 'img') pickFile('image/png,image/svg+xml,image/jpeg,image/webp', f => readImage(f, id => { const o = add({t:'img', x:p[0], y:p[1], rot:0, w:4, img:id, th:0.5, inv:false, ...BASE}); commit(); setTool('sel'); select(o.id); }));
 }
@@ -854,6 +855,7 @@ $('#lumeB').onclick = () => { view.lume = !view.lume; $('#lumeB').setAttribute('
 $('#handB').onclick = () => togglePrev();
 $('#gBtn').onclick = () => { gmode = gmode === 'obj' ? 'view' : 'obj'; syncChrome(); toast(gmode === 'obj' ? 'Two fingers scale and rotate the selected shape' : 'Two fingers zoom and pan the view'); };
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches && e.target.matches('input:not([type=checkbox]):not([type=search])')) { e.preventDefault(); e.target.blur(); return; }
   if (e.target.matches('input,select,textarea')) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if ((e.key === 'Delete' || e.key === 'Backspace') && selObj()) { delObj(selObj()); }
@@ -902,7 +904,7 @@ const secEl = (title, ...kids) => { const d = h('section', {class:'sec'}, title 
 function row(label, ctl, unit = '') { if (ctl.id === '' || !ctl.id) ctl.id = slug(label); return h('label', {class:'row', for:ctl.id}, h('span', {}, label), ctl._wrap || ctl, h('span', {class:'un'}, unit)); }
 function num(get, set, k = 'L', o = {}) {
   const fmt = v => v == null || !isFinite(v) ? '' : k === 'L' ? fmtL(v) : k === 'A' ? (+v).toFixed(2) : k === 'I' ? String(Math.round(v)) : String(+(+v).toFixed(3));
-  const inp = h('input', {type:'text', inputmode:'decimal', autocomplete:'off', spellcheck:'false', value:fmt(get())});
+  const inp = h('input', {type:'text', inputmode:'decimal', enterkeyhint:'done', autocomplete:'off', spellcheck:'false', value:fmt(get())});
   const parse = s => { let v = parseFloat(String(s).replace(',', '.')); if (!isFinite(v)) return null; if (k === 'L') v = doc.units === 'in' ? v * 25.4 : v; if (k === 'I') v = Math.round(v); if (o.min != null) v = Math.max(o.min, v); if (o.max != null) v = Math.min(o.max, v); return v; };
   inp.addEventListener('input', () => { const v = parse(inp.value); if (v != null) { set(v); scheduleRender(); } });
   inp.addEventListener('change', () => { inp.value = fmt(get()); commit(); if (o.re) renderPanel(); });
@@ -917,7 +919,7 @@ const unitOf = k => k === 'L' ? UL() : k === 'A' ? '°' : '';
 function choose(get, set, opts, re = true) { const el = h('select', {}, ...opts.map(([v, l]) => h('option', {value:String(v)}, l))); el.value = String(get()); el.addEventListener('change', () => { const v = opts.find(x => String(x[0]) === el.value)[0]; set(v); commit(); scheduleRender(); if (re) renderPanel(); }); return el; }
 function seg(get, set, opts) { const d = h('div', {class:'seg', role:'group'}); for (const [v, l] of opts) d.append(h('button', {type:'button', 'aria-pressed':String(get() === v), onclick:() => { set(v); commit(); scheduleRender(); renderPanel(); }}, l)); return d; }
 function tog(get, set, re = false) { const el = h('input', {type:'checkbox'}); el.checked = !!get(); el.addEventListener('change', () => { set(el.checked); commit(); scheduleRender(); if (re) renderPanel(); }); return el; }
-function txt(get, set) { const el = h('input', {type:'text', value:get(), autocomplete:'off'}); el.addEventListener('input', () => { set(el.value); scheduleRender(); }); el.addEventListener('change', () => commit()); return el; }
+function txt(get, set) { const el = h('input', {type:'text', value:get(), autocomplete:'off', enterkeyhint:'done'}); el.addEventListener('input', () => { set(el.value); scheduleRender(); }); el.addEventListener('change', () => commit()); return el; }
 const N = (o, label, key, k = 'L', opt = {}) => row(label, num(() => o[key], v => { o[key] = v; if (opt.after) opt.after(v); }, k, opt), unitOf(k));
 function fontRows(o, sizeLabel, sizeKey) {
   const m = FMAP.get(o.font), ws = m ? m.w : [400];
