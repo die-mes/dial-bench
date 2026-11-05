@@ -675,10 +675,14 @@ async function addUserFont(file) {
 
 /* ================= export ================= */
 function buildLayers() {
-  const base = [], score = [], bev = [], t = T(), cut = [], lume = [];
-  for (const o of doc.objs) { if (o.hid) continue; const g = geomOf(o); base.push(...g.F); score.push(...g.H); g.B.forEach((b, i) => (bev[i] = bev[i] || []).push(...b)); if (o.lume) lume.push(...g.F); }
+  const base = [], score = [], bev = [], t = T(), cut = [], lume = [], lumeD = {}, cfg = lumeCfg(), sand = isSandwich();
+  for (const o of doc.objs) { if (o.hid) continue; const g = geomOf(o), lu = o.lume && LUME[o.lume];
+    if (lu) { lume.push(...g.F); const d = +(o.ld || cfg.depth).toFixed(4); (lumeD[d] = lumeD[d] || []).push(...g.F); }
+    if (lu && sand) continue;
+    base.push(...g.F); score.push(...g.H); g.B.forEach((b, i) => (bev[i] = bev[i] || []).push(...b)); }
   if (t.panel) cut.push(dialPoly(t)); else if (doc.ex.cut) { cut.push(dialPoly(t)); if (t.hole) cut.push(circ(0, 0, t.hole / 2)); cut.push(...tplWins(t)); }
-  return {base:U(base), score, bev:bev.map(b => U(b)), cut, lume:U(lume), outline:!t.panel && doc.ex.outline && !doc.ex.cut ? dialPoly() : null};
+  const L_ = U(lume); if (sand && L_.length) { cut.length = 0; cut.push(dialPoly(t)); if (t.hole) cut.push(circ(0, 0, t.hole / 2)); cut.push(...tplWins(t), ...L_); }
+  return {base:U(base), score, bev:bev.map(b => U(b)), cut, lume:L_, lumeD:Object.entries(lumeD).map(([d, ps]) => ({d:+d, ps:U(ps)})).sort((a, b) => a.d - b.d), sand:sand && L_.length > 0, bottom:sand && L_.length ? OFF(L_, cfg.overlap) : null, outline:!t.panel && doc.ex.outline && !doc.ex.cut ? dialPoly() : null};
 }
 const PROF = {lb:{n:'LightBurn palette', eng:'#000000', score:'#0000FF', cut:'#FF0000'}, ponoko:{n:'Ponoko colors (gray fill engrave, red line engrave, blue cut)', eng:'#808080', score:'#FF0000', cut:'#0000FF'}};
 const BEVC = [3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15], bevCol = i => LB_PAL[BEVC[i % BEVC.length]], LUMEC = LB_PAL[6];
@@ -688,19 +692,20 @@ function svgOut(L, prof = doc.ex.prof || 'lb') {
   if (L.base.length) s += `<g id="Engrave" fill="${c.eng}" stroke="none" fill-rule="evenodd"><path d="${P(L.base)}"/></g>\n`;
   if (L.score.length) s += `<g id="Score" fill="none" stroke="${c.score}" stroke-width="0.025">${L.score.map(x => `<path d="${P([x.p], x.c)}"/>`).join('')}</g>\n`;
   L.bev.forEach((bv, i) => { s += `<g id="Bevel_${i + 1}" fill="${bevCol(i)}" stroke="none" fill-rule="evenodd"><path d="${P(bv)}"/></g>\n`; });
-  if (L.lume && L.lume.length) s += `<g id="Lume" fill="${LUMEC}" stroke="none" fill-rule="evenodd"><path d="${P(L.lume)}"/></g>\n`;
+  if (!L.sand) (L.lumeD || []).forEach(g => { s += `<g id="Lume_${(g.d / 25.4).toFixed(4)}in_deep" fill="${LUMEC}" stroke="none" fill-rule="evenodd"><path d="${P(g.ps)}"/></g>\n`; });
   if (L.cut.length) s += `<g id="Cut" fill="none" stroke="${c.cut}" stroke-width="0.025"><path d="${P(L.cut)}"/></g>\n`;
   if (L.outline) s += `<g id="Dial_outline" fill="none" stroke="${LB_PAL[8]}" stroke-width="0.025"><path d="${P([L.outline])}"/></g>\n`;
   return s + '</svg>\n';
 }
 function dxfOut(L) {
   const inch = doc.units === 'in', k = inch ? 1 / 25.4 : 1, f = v => (v * k).toFixed(6), o = [], p = (...a) => o.push(...a);
-  const lays = [['ENGRAVE', 7], ['SCORE', 5], ['CUT', 1], ['LUME', 4], ...L.bev.map((_, i) => [`BEVEL_${i + 1}`, ACI[i % ACI.length]])]; if (L.outline) lays.push(['DIAL_OUTLINE', 8]);
+  const lumeLay = g => `LUME_${(g.d / 25.4).toFixed(4).replace('.', 'P')}IN`;
+  const lays = [['ENGRAVE', 7], ['SCORE', 5], ['CUT', 1], ...(L.sand ? [] : (L.lumeD || []).map(g => [lumeLay(g), 4])), ...L.bev.map((_, i) => [`BEVEL_${i + 1}`, ACI[i % ACI.length]])]; if (L.outline) lays.push(['DIAL_OUTLINE', 8]);
   p('0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', inch ? '1' : '4', '0', 'ENDSEC');
   p('0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', String(lays.length)); for (const [n, c] of lays) p('0', 'LAYER', '2', n, '70', '0', '62', String(c), '6', 'CONTINUOUS'); p('0', 'ENDTAB', '0', 'ENDSEC');
   p('0', 'SECTION', '2', 'ENTITIES');
   const pl = (pts, lay, closed) => { p('0', 'POLYLINE', '8', lay, '66', '1', '70', closed ? '1' : '0', '10', '0', '20', '0', '30', '0'); for (const q of pts) p('0', 'VERTEX', '8', lay, '10', f(q[0]), '20', f(-q[1]), '30', '0'); p('0', 'SEQEND', '8', lay); };
-  L.base.forEach(q => pl(q, 'ENGRAVE', 1)); L.score.forEach(x => pl(x.p, 'SCORE', x.c)); L.cut.forEach(q => pl(q, 'CUT', 1)); (L.lume || []).forEach(q => pl(q, 'LUME', 1)); L.bev.forEach((bv, i) => bv.forEach(q => pl(q, `BEVEL_${i + 1}`, 1))); if (L.outline) pl(L.outline, 'DIAL_OUTLINE', 1);
+  L.base.forEach(q => pl(q, 'ENGRAVE', 1)); L.score.forEach(x => pl(x.p, 'SCORE', x.c)); L.cut.forEach(q => pl(q, 'CUT', 1)); if (!L.sand) (L.lumeD || []).forEach(g => g.ps.forEach(q => pl(q, lumeLay(g), 1))); L.bev.forEach((bv, i) => bv.forEach(q => pl(q, `BEVEL_${i + 1}`, 1))); if (L.outline) pl(L.outline, 'DIAL_OUTLINE', 1);
   p('0', 'ENDSEC', '0', 'EOF'); return o.join('\r\n') + '\r\n';
 }
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -709,9 +714,9 @@ async function depthPNG(L) {
   const b = bnds(), W = b[2] - b[0], H = b[3] - b[1], dpi = doc.ex.dpi || 1000, k = dpi / 25.4, NX = Math.round(W * k), NY = Math.round(H * k), inv = doc.ex.inv;
   const c = document.createElement('canvas'); c.width = NX; c.height = NY; const g = c.getContext('2d');
   g.fillStyle = inv ? '#000' : '#fff'; g.fillRect(0, 0, NX, NY); g.setTransform(k, 0, 0, k, -b[0] * k, -b[1] * k);
-  const maxL = 1 + L.bev.length, gray = l => { let v = Math.round(255 * (1 - l / maxL)); if (inv) v = 255 - v; return `rgb(${v},${v},${v})`; };
+  const pk = !L.sand && L.lume && L.lume.length, maxL = 1 + L.bev.length + (pk ? 1 : 0), gray = l => { let v = Math.round(255 * (1 - l / maxL)); if (inv) v = 255 - v; return `rgb(${v},${v},${v})`; };
   const fillP = (ps, col) => { if (!ps.length) return; const pa = new Path2D(); for (const q of ps) { pa.moveTo(q[0][0], q[0][1]); for (const r of q) pa.lineTo(r[0], r[1]); pa.closePath(); } g.fillStyle = col; g.fill(pa, 'evenodd'); };
-  fillP(L.base, gray(1)); L.bev.forEach((b, i) => fillP(b, gray(2 + i)));
+  fillP(L.base, gray(1)); L.bev.forEach((b, i) => fillP(b, gray(2 + i))); if (pk) fillP(L.lume, gray(maxL));
   const blob = await new Promise(r => c.toBlob(r, 'image/png')); let u = new Uint8Array(await blob.arrayBuffer());
   const ppm = Math.round(dpi / 0.0254), chunk = new Uint8Array(21), dv = new DataView(chunk.buffer);
   dv.setUint32(0, 9); chunk.set([112, 72, 89, 115], 4); dv.setUint32(8, ppm); dv.setUint32(12, ppm); chunk[16] = 1; dv.setUint32(17, crc32(chunk.subarray(4, 17)));
@@ -736,7 +741,7 @@ function readme(L) {
     t.panel ? '' : `Dial: Ø ${mm(2 * t.R)}${t.flats ? ', with two crown-side flats' : ''}. Geometry source: ${t.src}`, '',
     'Files', `  design.svg   1:1, units mm, center at 0,0. Colors: ${c.n}`, `  design.dxf   R12 polylines in ${u === 'in' ? 'inches' : 'millimeters'}, center at 0,0, Y up`,
     `  job-sheet.pdf  page 1 specs and tolerances, page 2 artwork at 1:1, page 3 enlarged reference`, `  depth-${doc.ex.dpi}dpi.png  grayscale depth map, ${doc.ex.inv ? 'black = surface' : 'white = surface'}, darker steps are deeper`, '',
-    'Layers', `  Engrave: filled areas`, L.lume && L.lume.length ? `  Lume: areas to fill with lume (${lumeNames()}). Also included in Engrave.` : '', `  Score: hairlines and open lines${L.score.length ? '' : ' (empty)'}`, `  Cut: ${L.cut.length ? (t.panel ? 'part outline' : 'dial outline, center hole and windows') : 'none'}`,
+    'Layers', `  Engrave: filled areas`, L.sand ? `  Sandwich dial: lume openings are cut through the top plate (Cut layer). bottom-lume-map.svg shows where to apply ${lumeNames()} on the bottom plate.` : '', ...(!L.sand && L.lumeD ? L.lumeD.map(g => `  Lume_${(g.d / 25.4).toFixed(4)}in_deep: lume pockets at least ${(g.d / 25.4).toFixed(4)} in (${g.d.toFixed(3)} mm) deep, ${lumeNames()}. Also in Engrave.`) : []), `  Score: hairlines and open lines${L.score.length ? '' : ' (empty)'}`, `  Cut: ${L.cut.length ? (t.panel ? 'part outline' : 'dial outline, center hole and windows') : 'none'}`,
     ...L.bev.map((_, i) => `  Bevel_${i + 1}: bevel step ${i + 1}, inset further from each edge. One extra pass per step after Engrave.`),
     L.outline ? '  Dial_outline: alignment only, do not engrave' : '', '', 'Text, icons and logos are vector outlines. No fonts are needed.'].filter(x => x !== '').join('\n');
 }
@@ -749,7 +754,8 @@ const fname = ext => `${slugN(doc.kind === 'panel' ? doc.name : doc.name === 'Di
 const projJSON = () => JSON.stringify({app:'Dial Bench', v:2, proj});
 async function laserPack(L, vendor, st) {
   const png = await depthPNG(L), pdf = jobSheetPDF(L, vendor, st);
-  return zip([{name:'design.svg', data:svgOut(L)}, {name:'design.dxf', data:dxfOut(L)}, {name:'job-sheet.pdf', data:pdf}, {name:`depth-${doc.ex.dpi}dpi.png`, data:png}, {name:'README.txt', data:readme(L)}]);
+  const t = T(), sandExtra = L.sand ? [{name:'bottom-lume-map.svg', data:svgOut({base:L.bottom, score:[], bev:[], cut:[dialPoly(t), ...(t.hole ? [circ(0, 0, t.hole / 2)] : []), ...tplWins(t)], lume:[], lumeD:[], outline:null})}] : [];
+  return zip([{name:L.sand ? 'top-plate.svg' : 'design.svg', data:svgOut(L)}, {name:L.sand ? 'top-plate.dxf' : 'design.dxf', data:dxfOut(L)}, ...sandExtra, {name:'job-sheet.pdf', data:pdf}, {name:`depth-${doc.ex.dpi}dpi.png`, data:png}, {name:'README.txt', data:readme(L)}]);
 }
 
 /* ================= UI: chrome ================= */
@@ -914,7 +920,7 @@ function pObj() {
     open || o.fill === false ? N(o, 'Line width', 'sw', 'L', {min:0}) : null,
     open || o.fill === false ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Line width 0 exports a hairline on the Score layer. Above 0, the line becomes an engraved band of that exact width.') : null,
     row('Color', colorCtl(o)), row('Lume', choose(() => o.lume || '', v => o.lume = v || undefined, [['', 'None'], ...Object.entries(LUME).map(([k, l]) => [k, l.n])])),
-    o.lume ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Lumed areas also export on their own Lume layer and as a lume stencil. Tap the moon on the canvas to see the glow.') : null,
+    o.lume ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, narrowLume(o).length ? `⚠ Narrower than your ${fmtL(lumeCfg().minW)} ${UL()} lume minimum in places. Make it wider or remove lume.` : `${isSandwich() ? 'Cut through the top plate (sandwich).' : `Engraved as a lume pocket at least ${fmtL(o.ld || lumeCfg().depth)} ${UL()} deep.`} Tap the moon on the canvas to see the glow.`) : null,
     o.t === 'ring' ? null : row('Exclusion zone', tog(() => o.ex, v => o.ex = v)),
     o.t === 'ring' ? null : h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Furniture rings stop short of exclusion zones. Hour indices are always exclusion zones.'));
   secEl('Bevel', N(o, 'Bevel width', 'bw', 'L', {min:0}), N(o, 'Steps', 'bs', 'I', {min:1, max:12}), row('Profile', seg(() => o.bp, v => o.bp = v, [['flat', 'Flat'], ['round', 'Rounded']])),
@@ -955,6 +961,7 @@ function newDesign(kind) {
   let d;
   if (kind === 'dial') { d = blankDoc(doc && doc.kind === 'dial' ? doc.tpl : 'NH36-3H'); d.name = 'Dial ' + (proj.designs.filter(x => x.kind === 'dial').length + 1); }
   else if (kind === 'test') d = testCardDoc();
+  else if (kind === 'lumetest') d = lumeTestCardDoc();
   else { const P = PANELS[kind]; d = blankDoc('NH36-3H'); Object.assign(d, {kind:'panel', name:P.name, panel:{w:P.w, h:P.h, cr:P.cr, shape:P.shape, mat:P.mat}, safe:3.175, look:{...P.look}}); d.guides.safe = 1; }
   d.units = doc ? doc.units : 'in'; proj.designs.push(d); switchDesign(proj.designs.length - 1);
 }
@@ -990,6 +997,7 @@ function pTpl() {
       h('div', {style:'overflow-x:auto'}, h('table', {class:'spec'}, h('tbody', {}, rows.map(([a, b]) => h('tr', {}, h('td', {}, a), h('td', {}, b)))))),
       h('p', {class:'src', style:'margin:0'}, `Source: ${t.src}. Inches first, mm in brackets. X right, Y up from dial center.`));
   }
+  lumeSection();
   const G = doc.guides, gt = (k, l) => row(l, tog(() => G[k], v => G[k] = v ? 1 : 0));
   secEl('Guide layers (never exported)', gt('outline', t.panel ? 'Panel outline' : 'Dial outline'), gt('safe', t.panel ? 'Edge margin' : 'Chapter-ring margin'),
     t.panel ? null : [row('Margin width', num(() => doc.safe, v => doc.safe = Math.max(0, v)), UL()), gt('hole', 'Center hole'), gt('win', 'Windows'), gt('feet', 'Dial feet'), t.subs ? gt('subs', 'Subdials') : null, gt('grid', 'Minute grid'), t.back ? gt('back', 'Back-side flat zones') : null]);
@@ -1135,6 +1143,7 @@ function preflight(v) {
     if (polyArea(DIFF(g.F, edge)) > 1e-3) out.push({o, sev:'err', msg:t.panel ? 'Runs past the panel edge.' : 'Runs past the dial edge.'});
     else if (polyArea(DIFF(g.F, keep)) > 1e-3) out.push({o, sev:'warn', msg:t.panel ? 'Sits inside the edge margin.' : 'Sits under the chapter-ring margin and may be hidden.'});
   }
+  out.push(...lumeIssues());
   scheduleRender();
   return out;
 }
@@ -1164,11 +1173,14 @@ function jobLines(v, st) {
   if (isFinite(sm.line)) L.push(`- Thinnest line: ${inmm(sm.line)}`);
   if (isFinite(sm.text)) L.push(`- Smallest text (cap height): ${inmm(sm.text)}`);
   if (sm.hair) L.push('- Includes hairline score lines (Score layer)');
-  const lumed = doc.objs.filter(o => !o.hid && o.lume && LUME[o.lume]);
-  if (lumed.length) L.push(`- Lume layer: ${lumed.length} element(s) I'll fill with ${lumeNames()}. If you can, engrave them as shallow pockets, 0.002" to 0.004" (0.05 to 0.10 mm) deep.`);
+  const lumed = lumedObjs(), lc = lumeCfg(), sandw = isSandwich() && lumed.length;
+  if (lumed.length && sandw) L.push(['h', 'SANDWICH DIAL (TWO PLATES)'], `- Top plate: brass ${inmm(lc.top)} thick, cut through on the Cut layer: outline, center hole, ${t.win.length ? 'windows, ' : ''}and ${lumed.length} lume opening(s)`,
+    `- Lume openings at least ${inmm(lc.minW)} wide; bridges between cuts at least ${inmm(lc.web)}`, `- Bottom plate: a standard dial blank with feet. I'll apply ${lumeNames()} using bottom-lume-map.svg`, '- Openings deburred, plate flat, no heat discoloration');
+  else if (lumed.length) { const LD = buildLayers().lumeD || []; L.push(['h', 'LUME POCKETS'], `- ${lumed.length} element(s) on the Lume layer${LD.length > 1 ? 's' : ''}, which I'll fill with ${lumeNames()}`,
+    ...LD.map(g => `- Layer Lume_${(g.d / 25.4).toFixed(4)}in_deep: engrave at least ${inmm(g.d)} deep, flat floor, clean walls`), `- Every pocket is at least ${inmm(lc.minW)} wide`, `- No pocket deeper than ${inmm(0.20)} (half the dial thickness)`); }
   L.push(['h', 'FILES ATTACHED'], `- ${fname('zip')}: SVG and DXF at 1:1, center at 0,0 (SVG in mm, DXF in ${doc.units === 'in' ? 'inches' : 'mm'}), depth map, readme`, `- ${fname('pdf')}: specs, artwork at 1:1, enlarged reference`);
   L.push(['h', 'QUESTIONS'], job === 'cut' ? '1. What is the thinnest brass you can cut, and your tolerance on it?' : '1. Which laser and lens do you use (fiber, MOPA or UV), and what spot size?',
-    job === 'cut' ? '2. Can you hold ±0.002" (0.05 mm) on a 1.12" part?' : '2. What are the thinnest line and smallest text you can hold on brass?', `3. Price per piece at ${st.qty} and at 25, and turnaround?`, '4. Can you run one test piece first?', lumed.length ? '5. Can you also fill the Lume layer with lume, or should I do that myself?' : '');
+    job === 'cut' ? '2. Can you hold ±0.002" (0.05 mm) on a 1.12" part?' : '2. What are the thinnest line and smallest text you can hold on brass?', `3. Price per piece at ${st.qty} and at 25, and turnaround?`, '4. Can you run one test piece first?', sandw ? `5. What is the thinnest brass you can cut cleanly, and can you hold ±0.002" (0.05 mm) on the lume openings?` : lumed.length ? '5. Can you hold the lume pocket depth within ±0.001" (0.025 mm)?' : '');
   L.push(['h', 'DUE'], st.due ? `- ${st.due}` : '- Flexible');
   if (st.notes) L.push(['h', 'NOTES'], st.notes);
   return L.filter(Boolean);
@@ -1260,7 +1272,8 @@ function pOrder() {
   secEl('Vendors', h('div', {class:'list'}, proj.vendors.map(v => h('div', {class:'li'}, h('button', {type:'button', class:'nm', onclick:() => editVendor(v)}, v.name, h('small', {}, v.where)),
       h('button', {type:'button', class:'mini', onclick:() => openSend(v.id)}, 'Send')))),
     h('div', {class:'chips'}, h('button', {type:'button', class:'mini', onclick:() => { const v = {id:'v' + Date.now(), name:'New vendor', where:'', email:'', phone:'', web:'', job:'engrave', prof:'lb', minLine:0, minText:0, does:''}; proj.vendors.push(v); persist(); editVendor(v); }}, '+ Add vendor'),
-      h('button', {type:'button', class:'mini', onclick:() => { newDesign('test'); toast('Test card added. Send it to each shop first.'); }}, '+ Shop test card')));
+      h('button', {type:'button', class:'mini', onclick:() => { newDesign('test'); toast('Test card added. Send it to each shop first.'); }}, '+ Shop test card'),
+      h('button', {type:'button', class:'mini', onclick:() => { newDesign('lumetest'); toast('Lume test card added.'); }}, '+ Lume test card')));
   const os = proj.orders;
   secEl('Orders', os.length ? h('div', {class:'list'}, os.map(o => h('div', {class:'li'}, h('button', {type:'button', class:'nm', onclick:() => editOrder(o)}, `${vById(o.vendor).name} · ${o.qty} × ${o.design}`,
       h('small', {}, `${o.status} · ${o.sent}${o.cost ? ' · $' + (+o.cost).toFixed(2) : ''}`))))) : h('p', {class:'muted', style:'margin:0'}, 'No orders yet. Log one from Send to vendor, or add it by hand.'),
@@ -1388,6 +1401,74 @@ function jobSheetPDF(L, vendor, st0) {
     t.win.forEach(w => ln(w.d ? `Open-heart opening Ø ${inmm2(w.d)}, centered at x ${inmm2(w.x)}, y ${inmm2(w.y)} (Y up).` : `Window ${inmm2(w.w)} × ${inmm2(w.h)}, centered at x ${inmm2(w.x)}, y ${inmm2(w.y)} (Y up).`)); ln(`Source: ${t.src}.`); }
   P3.t(430, 30, 8.5, 'Page 3 of 3  ·  Dial Bench');
   return pdfBytes([P1, P2, P3]);
+}
+
+/* ================= lume: rules, checks, sandwich dials ================= */
+const IN = 25.4;
+const LUMEDEF = {mode:'pocket', minW:0.025 * IN, depth:0.005 * IN, top:0.006 * IN, web:0.025 * IN, overlap:0.010 * IN};
+const lumeCfg = () => ({...LUMEDEF, ...(proj && proj.lumeStd || {}), ...(doc && doc.lume || {})});
+function setL(k, v) { doc.lume = {...(doc.lume || {}), [k]:v}; if (k !== 'mode') proj.lumeStd = {...(proj.lumeStd || {}), [k]:v}; }
+const sArea = p => { let s = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) s += (p[j][0] + p[i][0]) * (p[j][1] - p[i][1]); return s / 2; };
+const isSandwich = () => !T().panel && lumeCfg().mode === 'sandwich';
+const lumedObjs = () => doc.objs.filter(o => !o.hid && o.lume && LUME[o.lume]);
+function narrowParts(F, w) {
+  if (!F.length || !(w > 0)) return [];
+  const e = w * 0.15, th = OFF(OFF(DIFF(F, OFF(OFF(F, -w / 2), w / 2)), -e), e);
+  return polyArea(th) > w * w * 0.5 ? th : [];
+}
+const narrowLume = o => narrowParts(geomOf(o).F, lumeCfg().minW * 0.97);
+function sandwichCheck() {
+  const t = T(), cfg = lumeCfg(), lume = U(lumedObjs().flatMap(o => geomOf(o).F));
+  if (!lume.length) return {islands:[], thin:[], top:[]};
+  const holes = U([...lume, ...(t.hole ? [circ(0, 0, t.hole / 2)] : []), ...tplWins(t)]);
+  const top = DIFF([dialPoly(t)], holes), outers = top.filter(p => sArea(p) < 0).sort((a, b) => Math.abs(sArea(b)) - Math.abs(sArea(a)));
+  const islands = outers.slice(1);
+  return {islands, thin:narrowParts(top, cfg.web * 0.97), top};
+}
+function lumeIssues() {
+  const out = [], cfg = lumeCfg();
+  for (const o of lumedObjs()) { const nr = narrowLume(o); if (nr.length) { pfThin.push(...nr); out.push({o, sev:'warn', msg:`Lume is narrower than ${fmtL(cfg.minW)} ${UL()} in places (red). It may not fill cleanly.`}); } }
+  if (isSandwich()) {
+    const sc = sandwichCheck();
+    if (sc.islands.length) { pfThin.push(...sc.islands); out.push({sev:'err', msg:`Cutting through would free ${sc.islands.length} loose piece${sc.islands.length > 1 ? 's' : ''} (red), like the middle of a 0 or a closed ring. Use a stencil font, or open the shape so every piece stays attached.`}); }
+    if (sc.thin.length) { pfThin.push(...sc.thin); out.push({sev:'warn', msg:`Some bridges between cuts are thinner than ${fmtL(cfg.web)} ${UL()} (red). They may bend or snap.`}); }
+  }
+  return out;
+}
+function handNote(top) {
+  const t = T();
+  if (!['NH35', 'NH36', 'NH37', 'NH38'].includes(t.mv)) return `Check hour-hand clearance on your movement’s hand-fitting sheet. The top plate raises the dial face by ${inmm(top)}.`;
+  return `The hour hand sits ${inmm(0.60)} above a standard dial with Type M hands, and ${inmm(1.00)} with Type L (NH35A hand-fitting sheet). A ${inmm(top)} top plate leaves ${inmm(0.60 - top)} with Type M and ${inmm(1.00 - top)} with Type L.`;
+}
+function lumeSection() {
+  const t = T(), cfg = lumeCfg(), n = lumedObjs().length, sand = isSandwich();
+  const R = (label, k, min) => row(label, num(() => lumeCfg()[k], v => setL(k, Math.max(min, v)), 'L', {after:persist}), UL());
+  let status = null;
+  const check = h('button', {type:'button', class:'mini', onclick:() => { pfThin = []; const iss = lumeIssues(); scheduleRender(); status.replaceChildren(issueList(iss)); }}, 'Check lume');
+  status = h('div', {});
+  secEl('Lume', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${n} lumed element${n === 1 ? '' : 's'}. Set lume on any element in Object → Engrave.`),
+    t.panel ? null : row('Method', seg(() => cfg.mode, v => setL('mode', v), [['pocket', 'Engraved pockets'], ['sandwich', 'Sandwich']])),
+    R('Min lume width', 'minW', 0.05),
+    sand ? [R('Top plate thickness', 'top', 0.05), R('Min bridge', 'web', 0.05), R('Lume map overlap', 'overlap', 0),
+      h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Lumed elements are cut through the top plate. The bottom plate is a standard dial blank with feet; the lume map shows where to apply lume, ${inmm(cfg.overlap)} past each opening. ${handNote(cfg.top)}`)]
+      : [R('Min pocket depth', 'depth', 0.01), h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Lumed elements are engraved as pockets at least ${inmm(cfg.depth)} deep and exported on a Lume layer. Nemoto’s LumiNova data: at least 0.004" (100 µm) of lume, best glow at 0.005"–0.006" (130–150 µm). Keep pockets under ${inmm(0.20)}, half the dial thickness.`)],
+    h('div', {class:'chips'}, check, h('button', {type:'button', class:'mini', onclick:() => newDesign('lumetest')}, '+ Lume test card')), status);
+}
+function lumeTestCardDoc() {
+  const keep = doc, tp = doc && doc.kind === 'dial' && doc.tpl !== 'VK67' ? doc.tpl : 'NH36-3H', d = blankDoc(tp); d.name = 'Lume test card'; doc = d;
+  const tx = (s, x, y, hh, al = 'c', wt = 600) => add({t:'text', x, y, rot:0, s, font:'Atkinson Hyperlegible Next', wt, it:false, h:hh, tr:0.03, al, curve:false, cr:6, ca:0, cx:0, cy:0, inside:false, ...BASE});
+  const W = [0.020, 0.025, 0.030, 0.035, 0.040], xs = [-6, -3, 0, 3, 6], rows = [['A', -6.4, 0.005], ['B', 5.6, 0.006]];
+  tx('LUME TEST CARD', 0, 11.55, 0.6);
+  add({t:'rect', cx:0, cy:-12.55, w:0.45, h:0.9, rot:0, cr:0, ...BASE, name:'12 o’clock mark'});
+  W.forEach((w, i) => tx(`.${String(Math.round(w * 1000)).padStart(3, '0')}`, xs[i], -9.4, 0.42, 'c', 500));
+  for (const [lab, y, dep] of rows) {
+    tx(lab, -8.6, y, 0.7);
+    W.forEach((w, i) => add({t:'rect', cx:xs[i], cy:y, w:w * IN, h:4, rot:0, cr:w * IN / 2, ...BASE, lume:'C3', ld:dep * IN, name:`Lume ${lab} ${w}"`}));
+  }
+  tx('A = .005" DEEP    B = .006" DEEP', 0, -0.2 - 1.6, 0.42, 'c', 500);
+  [0.025, 0.030, 0.040, 0.050, 0.060].forEach((dd, i) => { add({t:'circle', cx:xs[i], cy:9.0, r:dd * IN / 2, ...BASE, lume:'C3', name:`Lume dot ${dd}"`}); });
+  tx('DOTS .025 .030 .040 .050 .060', 0, 10.3, 0.36, 'c', 500);
+  doc = keep; return d;
 }
 
 /* ================= boot ================= */
