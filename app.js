@@ -675,17 +675,19 @@ async function addUserFont(file) {
 
 /* ================= export ================= */
 function buildLayers() {
-  const base = [], score = [], bev = [], t = T(), cut = [], lume = [], lumeD = {}, cfg = lumeCfg(), sand = isSandwich();
+  const base = [], score = [], bev = [], t = T(), cut = [], lume = [], lumeD = {}, paint = {}, cfg = lumeCfg(), sand = isSandwich();
   for (const o of doc.objs) { if (o.hid) continue; const g = geomOf(o), lu = o.lume && LUME[o.lume];
     if (lu) { lume.push(...g.F); const d = +(o.ld || cfg.depth).toFixed(4); (lumeD[d] = lumeD[d] || []).push(...g.F); }
+    if (o.pf && !lu) { const k = paintOf(o); (paint[k] = paint[k] || []).push(...g.F); }
     if (lu && sand) continue;
     base.push(...g.F); score.push(...g.H); g.B.forEach((b, i) => (bev[i] = bev[i] || []).push(...b)); }
   if (t.panel) cut.push(dialPoly(t)); else if (doc.ex.cut) { cut.push(dialPoly(t)); if (t.hole) cut.push(circ(0, 0, t.hole / 2)); cut.push(...tplWins(t)); }
   const L_ = U(lume); if (sand && L_.length) { cut.length = 0; cut.push(dialPoly(t)); if (t.hole) cut.push(circ(0, 0, t.hole / 2)); cut.push(...tplWins(t), ...L_); }
-  return {base:U(base), score, bev:bev.map(b => U(b)), cut, lume:L_, lumeD:Object.entries(lumeD).map(([d, ps]) => ({d:+d, ps:U(ps)})).sort((a, b) => a.d - b.d), sand:sand && L_.length > 0, bottom:sand && L_.length ? OFF(L_, cfg.overlap) : null, outline:!t.panel && doc.ex.outline && !doc.ex.cut ? dialPoly() : null};
+  return {base:U(base), score, bev:bev.map(b => U(b)), cut, lume:L_, paint:Object.entries(paint).map(([col, ps]) => ({col, ps:U(ps)})), lumeD:Object.entries(lumeD).map(([d, ps]) => ({d:+d, ps:U(ps)})).sort((a, b) => a.d - b.d), sand:sand && L_.length > 0, bottom:sand && L_.length ? OFF(L_, cfg.overlap) : null, outline:!t.panel && doc.ex.outline && !doc.ex.cut ? dialPoly() : null};
 }
 const PROF = {lb:{n:'LightBurn palette', eng:'#000000', score:'#0000FF', cut:'#FF0000'}, ponoko:{n:'Ponoko colors (gray fill engrave, red line engrave, blue cut)', eng:'#808080', score:'#FF0000', cut:'#0000FF'}};
-const BEVC = [3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15], bevCol = i => LB_PAL[BEVC[i % BEVC.length]], LUMEC = LB_PAL[6];
+const PAINTC = [13, 14, 15, 12], paintCol = i => LB_PAL[PAINTC[i % PAINTC.length]];
+const BEVC = [3, 4, 5, 7, 9, 10, 11], bevCol = i => LB_PAL[BEVC[i % BEVC.length]], LUMEC = LB_PAL[6];
 function svgOut(L, prof = doc.ex.prof || 'lb') {
   if (doc.kind !== 'panel') prof = 'lb';
   const t = T(), b = bnds(), W = b[2] - b[0], H = b[3] - b[1], c = PROF[prof] || PROF.lb, f = v => +v.toFixed(4), P = (ps, cl = true) => ps.map(p => 'M' + p.map(q => f(q[0]) + ' ' + f(q[1])).join(' L') + (cl ? ' Z' : '')).join(' ');
@@ -693,6 +695,7 @@ function svgOut(L, prof = doc.ex.prof || 'lb') {
   if (L.base.length) s += `<g id="Engrave" fill="${c.eng}" stroke="none" fill-rule="evenodd"><path d="${P(L.base)}"/></g>\n`;
   if (L.score.length) s += `<g id="Score" fill="none" stroke="${c.score}" stroke-width="0.025">${L.score.map(x => `<path d="${P([x.p], x.c)}"/>`).join('')}</g>\n`;
   L.bev.forEach((bv, i) => { s += `<g id="Bevel_${i + 1}" fill="${bevCol(i)}" stroke="none" fill-rule="evenodd"><path d="${P(bv)}"/></g>\n`; });
+  (L.paint || []).forEach((g, i) => { s += `<g id="Paint_${i + 1}_${g.col.replace('#', '')}" fill="${paintCol(i)}" stroke="none" fill-rule="evenodd"><path d="${P(g.ps)}"/></g>\n`; });
   if (!L.sand) (L.lumeD || []).forEach(g => { s += `<g id="Lume_${(g.d / 25.4).toFixed(4)}in_deep" fill="${LUMEC}" stroke="none" fill-rule="evenodd"><path d="${P(g.ps)}"/></g>\n`; });
   if (L.cut.length) s += `<g id="Cut" fill="none" stroke="${c.cut}" stroke-width="0.025"><path d="${P(L.cut)}"/></g>\n`;
   if (L.outline) s += `<g id="Dial_outline" fill="none" stroke="${LB_PAL[8]}" stroke-width="0.025"><path d="${P([L.outline])}"/></g>\n`;
@@ -700,13 +703,13 @@ function svgOut(L, prof = doc.ex.prof || 'lb') {
 }
 function dxfOut(L) {
   const inch = doc.units === 'in', k = inch ? 1 / 25.4 : 1, f = v => (v * k).toFixed(6), o = [], p = (...a) => o.push(...a);
-  const lumeLay = g => `LUME_${(g.d / 25.4).toFixed(4).replace('.', 'P')}IN`;
-  const lays = [['ENGRAVE', 7], ['SCORE', 5], ['CUT', 1], ...(L.sand ? [] : (L.lumeD || []).map(g => [lumeLay(g), 4])), ...L.bev.map((_, i) => [`BEVEL_${i + 1}`, ACI[i % ACI.length]])]; if (L.outline) lays.push(['DIAL_OUTLINE', 8]);
+  const lumeLay = g => `LUME_${(g.d / 25.4).toFixed(4).replace('.', 'P')}IN`, paintLay = (g, i) => `PAINT_${i + 1}_${g.col.replace('#', '').toUpperCase()}`;
+  const lays = [['ENGRAVE', 7], ['SCORE', 5], ['CUT', 1], ...(L.sand ? [] : (L.lumeD || []).map(g => [lumeLay(g), 4])), ...(L.paint || []).map((g, i) => [paintLay(g, i), [6, 30, 40, 210][i % 4]]), ...L.bev.map((_, i) => [`BEVEL_${i + 1}`, ACI[i % ACI.length]])]; if (L.outline) lays.push(['DIAL_OUTLINE', 8]);
   p('0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', inch ? '1' : '4', '0', 'ENDSEC');
   p('0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', String(lays.length)); for (const [n, c] of lays) p('0', 'LAYER', '2', n, '70', '0', '62', String(c), '6', 'CONTINUOUS'); p('0', 'ENDTAB', '0', 'ENDSEC');
   p('0', 'SECTION', '2', 'ENTITIES');
   const pl = (pts, lay, closed) => { p('0', 'POLYLINE', '8', lay, '66', '1', '70', closed ? '1' : '0', '10', '0', '20', '0', '30', '0'); for (const q of pts) p('0', 'VERTEX', '8', lay, '10', f(q[0]), '20', f(-q[1]), '30', '0'); p('0', 'SEQEND', '8', lay); };
-  L.base.forEach(q => pl(q, 'ENGRAVE', 1)); L.score.forEach(x => pl(x.p, 'SCORE', x.c)); L.cut.forEach(q => pl(q, 'CUT', 1)); if (!L.sand) (L.lumeD || []).forEach(g => g.ps.forEach(q => pl(q, lumeLay(g), 1))); L.bev.forEach((bv, i) => bv.forEach(q => pl(q, `BEVEL_${i + 1}`, 1))); if (L.outline) pl(L.outline, 'DIAL_OUTLINE', 1);
+  L.base.forEach(q => pl(q, 'ENGRAVE', 1)); L.score.forEach(x => pl(x.p, 'SCORE', x.c)); L.cut.forEach(q => pl(q, 'CUT', 1)); (L.paint || []).forEach((g, i) => g.ps.forEach(q => pl(q, paintLay(g, i), 1))); if (!L.sand) (L.lumeD || []).forEach(g => g.ps.forEach(q => pl(q, lumeLay(g), 1))); L.bev.forEach((bv, i) => bv.forEach(q => pl(q, `BEVEL_${i + 1}`, 1))); if (L.outline) pl(L.outline, 'DIAL_OUTLINE', 1);
   p('0', 'ENDSEC', '0', 'EOF'); return o.join('\r\n') + '\r\n';
 }
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -715,9 +718,9 @@ async function depthPNG(L) {
   const b = bnds(), W = b[2] - b[0], H = b[3] - b[1], dpi = doc.ex.dpi || 1000, k = dpi / 25.4, NX = Math.round(W * k), NY = Math.round(H * k), inv = doc.ex.inv;
   const c = document.createElement('canvas'); c.width = NX; c.height = NY; const g = c.getContext('2d');
   g.fillStyle = inv ? '#000' : '#fff'; g.fillRect(0, 0, NX, NY); g.setTransform(k, 0, 0, k, -b[0] * k, -b[1] * k);
-  const pk = !L.sand && L.lume && L.lume.length, maxL = 1 + L.bev.length + (pk ? 1 : 0), gray = l => { let v = Math.round(255 * (1 - l / maxL)); if (inv) v = 255 - v; return `rgb(${v},${v},${v})`; };
+  const pp = (L.paint || []).flatMap(g => g.ps), pk = (!L.sand && L.lume && L.lume.length) || pp.length, maxL = 1 + L.bev.length + (pk ? 1 : 0), gray = l => { let v = Math.round(255 * (1 - l / maxL)); if (inv) v = 255 - v; return `rgb(${v},${v},${v})`; };
   const fillP = (ps, col) => { if (!ps.length) return; const pa = new Path2D(); for (const q of ps) { pa.moveTo(q[0][0], q[0][1]); for (const r of q) pa.lineTo(r[0], r[1]); pa.closePath(); } g.fillStyle = col; g.fill(pa, 'evenodd'); };
-  fillP(L.base, gray(1)); L.bev.forEach((b, i) => fillP(b, gray(2 + i))); if (pk) fillP(L.lume, gray(maxL));
+  fillP(L.base, gray(1)); L.bev.forEach((b, i) => fillP(b, gray(2 + i))); if (pk) { fillP(pp, gray(maxL)); if (!L.sand) fillP(L.lume, gray(maxL)); }
   const blob = await new Promise(r => c.toBlob(r, 'image/png')); let u = new Uint8Array(await blob.arrayBuffer());
   const ppm = Math.round(dpi / 0.0254), chunk = new Uint8Array(21), dv = new DataView(chunk.buffer);
   dv.setUint32(0, 9); chunk.set([112, 72, 89, 115], 4); dv.setUint32(8, ppm); dv.setUint32(12, ppm); chunk[16] = 1; dv.setUint32(17, crc32(chunk.subarray(4, 17)));
@@ -742,7 +745,7 @@ function readme(L) {
     t.panel ? '' : `Dial: Ø ${mm(2 * t.R)}${t.flats ? ', with two crown-side flats' : ''}. Geometry source: ${t.src}`, '',
     'Files', `  design.svg   1:1, units mm, center at 0,0. Colors: ${c.n}`, `  design.dxf   R12 polylines in ${u === 'in' ? 'inches' : 'millimeters'}, center at 0,0, Y up`,
     `  job-sheet.pdf  page 1 specs and tolerances, page 2 artwork at 1:1, page 3 enlarged reference`, `  depth-${doc.ex.dpi}dpi.png  grayscale depth map, ${doc.ex.inv ? 'black = surface' : 'white = surface'}, darker steps are deeper`, '',
-    'Layers', `  Engrave: filled areas`, L.sand ? `  Sandwich dial: lume openings are cut through the top plate (Cut layer). bottom-lume-map.svg shows where to apply ${lumeNames()} on the bottom plate.` : '', ...(!L.sand && L.lumeD ? L.lumeD.map(g => `  Lume_${(g.d / 25.4).toFixed(4)}in_deep: lume pockets at least ${(g.d / 25.4).toFixed(4)} in (${g.d.toFixed(3)} mm) deep, ${lumeNames()}. Also in Engrave.`) : []), `  Score: hairlines and open lines${L.score.length ? '' : ' (empty)'}`, `  Cut: ${L.cut.length ? (t.panel ? 'part outline' : 'dial outline, center hole and windows') : 'none'}`,
+    'Layers', `  Engrave: filled areas`, ...(L.paint || []).map((g, i) => `  Paint_${i + 1}_${g.col.replace('#', '')}: paint-fill pockets at least ${(paintCfg().depth / 25.4).toFixed(4)} in deep, filled with ${g.col}. Also in Engrave.`), L.sand ? `  Sandwich dial: lume openings are cut through the top plate (Cut layer). bottom-lume-map.svg shows where to apply ${lumeNames()} on the bottom plate.` : '', ...(!L.sand && L.lumeD ? L.lumeD.map(g => `  Lume_${(g.d / 25.4).toFixed(4)}in_deep: lume pockets at least ${(g.d / 25.4).toFixed(4)} in (${g.d.toFixed(3)} mm) deep, ${lumeNames()}. Also in Engrave.`) : []), `  Score: hairlines and open lines${L.score.length ? '' : ' (empty)'}`, `  Cut: ${L.cut.length ? (t.panel ? 'part outline' : 'dial outline, center hole and windows') : 'none'}`,
     ...L.bev.map((_, i) => `  Bevel_${i + 1}: bevel step ${i + 1}, inset further from each edge. One extra pass per step after Engrave.`),
     L.outline ? '  Dial_outline: alignment only, do not engrave' : '', '', 'Text, icons and logos are vector outlines. No fonts are needed.'].filter(x => x !== '').join('\n');
 }
@@ -920,7 +923,9 @@ function pObj() {
   secEl('Engrave', open ? null : row('Mode', seg(() => o.fill !== false, v => o.fill = v, [[true, 'Fill'], [false, 'Outline']])),
     open || o.fill === false ? N(o, 'Line width', 'sw', 'L', {min:0}) : null,
     open || o.fill === false ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Line width 0 exports a hairline on the Score layer. Above 0, the line becomes an engraved band of that exact width.') : null,
-    row('Color', colorCtl(o)), row('Lume', choose(() => o.lume || '', v => o.lume = v || undefined, [['', 'None'], ...Object.entries(LUME).map(([k, l]) => [k, l.n])])),
+    row('Color', colorCtl(o)), o.lume ? null : row('Paint fill', tog(() => o.pf, v => o.pf = v || undefined, true)),
+    o.pf && !o.lume ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, `Engraved as a pocket at least ${fmtL(paintCfg().depth)} ${UL()} deep, then filled with this element’s color. Its own Paint layer in the files.`) : null,
+    row('Lume', choose(() => o.lume || '', v => { o.lume = v || undefined; if (v) o.pf = undefined; }, [['', 'None'], ...Object.entries(LUME).map(([k, l]) => [k, l.n])])),
     o.lume ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, narrowLume(o).length ? `⚠ Narrower than your ${fmtL(lumeCfg().minW)} ${UL()} lume minimum in places. Make it wider or remove lume.` : `${isSandwich() ? 'Cut through the top plate (sandwich).' : `Engraved as a lume pocket at least ${fmtL(o.ld || lumeCfg().depth)} ${UL()} deep.`} Tap the moon on the canvas to see the glow.`) : null,
     o.t === 'ring' ? null : row('Exclusion zone', tog(() => o.ex, v => o.ex = v)),
     o.t === 'ring' ? null : h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'Furniture rings stop short of exclusion zones. Hour indices are always exclusion zones.'));
@@ -1001,7 +1006,7 @@ function pTpl() {
       h('div', {style:'overflow-x:auto'}, h('table', {class:'spec'}, h('tbody', {}, rows.map(([a, b]) => h('tr', {}, h('td', {}, a), h('td', {}, b)))))),
       h('p', {class:'src', style:'margin:0'}, `Source: ${t.src}. Inches first, mm in brackets. X right, Y up from dial center.`));
   }
-  lumeSection();
+  lumeSection(); paintSection();
   const G = doc.guides, gt = (k, l) => row(l, tog(() => G[k], v => G[k] = v ? 1 : 0));
   secEl('Guide layers (never exported)', gt('outline', t.panel ? 'Panel outline' : 'Dial outline'), gt('safe', t.panel ? 'Edge margin' : 'Chapter-ring margin'),
     t.panel ? null : [row('Margin width', num(() => doc.safe, v => doc.safe = Math.max(0, v)), UL()), gt('hole', 'Center hole'), gt('win', 'Windows'), gt('feet', 'Dial feet'), t.subs ? gt('subs', 'Subdials') : null, gt('grid', 'Minute grid'), t.back ? gt('back', 'Back-side flat zones') : null]);
@@ -1186,9 +1191,14 @@ function jobLines(v, st) {
     `- Lume openings at least ${inmm(lc.minW)} wide; bridges between cuts at least ${inmm(lc.web)}`, `- Bottom plate: a standard dial blank with feet. I'll apply ${lumeNames()} using bottom-lume-map.svg`, '- Openings deburred, plate flat, no heat discoloration');
   else if (lumed.length) { const LD = buildLayers().lumeD || []; L.push(['h', 'LUME POCKETS'], `- ${lumed.length} element(s) on the Lume layer${LD.length > 1 ? 's' : ''}, which I'll fill with ${lumeNames()}`,
     ...LD.map(g => `- Layer Lume_${(g.d / 25.4).toFixed(4)}in_deep: engrave at least ${inmm(g.d)} deep, flat floor, clean walls`), `- Every pocket is at least ${inmm(lc.minW)} wide`, `- No pocket deeper than ${inmm(0.20)} (half the dial thickness)`); }
+  const po = paintObjs(), pcfg = paintCfg();
+  if (po.length || (pcfg.base && !t.panel)) { const cols = [...new Set(po.map(paintOf))]; L.push(['h', 'PAINT FILL'],
+    pcfg.base && !t.panel ? `- The dial will already be painted${pcfg.baseName ? ' (' + pcfg.baseName + ')' : ''}. Please laser through the paint into the brass.` : '',
+    po.length ? `- ${po.length} element(s) on ${cols.length} Paint layer(s) (${cols.join(', ')}). Engrave them as pockets at least ${inmm(pcfg.depth)} deep, flat floor.` : '',
+    po.length && pcfg.mask ? '- Please apply masking film before engraving, laser through film and metal together, and leave the film on. I will fill and peel.' : ''); }
   L.push(['h', 'FILES ATTACHED'], `- ${fname('zip')}: SVG and DXF at 1:1, center at 0,0 (SVG in mm, DXF in ${doc.units === 'in' ? 'inches' : 'mm'}), depth map, readme`, `- ${fname('pdf')}: specs, artwork at 1:1, enlarged reference`);
   L.push(['h', 'QUESTIONS'], job === 'cut' ? '1. What is the thinnest brass you can cut, and your tolerance on it?' : '1. Which laser and lens do you use (fiber, MOPA or UV), and what spot size?',
-    job === 'cut' ? '2. Can you hold ±0.002" (0.05 mm) on a 1.12" part?' : '2. What are the thinnest line and smallest text you can hold on brass?', `3. Price per piece at ${st.qty} and at 25, and turnaround?`, '4. Can you run one test piece first?', sandw ? `5. What is the thinnest brass you can cut cleanly, and can you hold ±0.002" (0.05 mm) on the lume openings?` : lumed.length ? '5. Can you hold the lume pocket depth within ±0.001" (0.025 mm)?' : '');
+    job === 'cut' ? '2. Can you hold ±0.002" (0.05 mm) on a 1.12" part?' : '2. What are the thinnest line and smallest text you can hold on brass?', `3. Price per piece at ${st.qty} and at 25, and turnaround?`, '4. Can you run one test piece first?', po.length && pcfg.mask ? '5. Can you laser through masking film and send the parts back with the film still on?' : sandw ? `5. What is the thinnest brass you can cut cleanly, and can you hold ±0.002" (0.05 mm) on the lume openings?` : lumed.length ? '5. Can you hold the lume pocket depth within ±0.001" (0.025 mm)?' : '');
   L.push(['h', 'DUE'], st.due ? `- ${st.due}` : '- Flexible');
   if (st.notes) L.push(['h', 'NOTES'], st.notes);
   return L.filter(Boolean);
@@ -1390,7 +1400,7 @@ function jobSheetPDF(L, vendor, st0) {
     for (const w of wrapText(l, 98)) { if (y < 70) break; P1.t(w.startsWith('- ') || /^\d\./.test(w) ? 58 : 70, y, 9.5, w); y -= 12.5; }
   }
   y -= 8; P1.t(54, y, 10.5, 'LAYERS', true); y -= 14;
-  [['Engrave', 'filled areas (black on page 2)'], ['Score', 'hairlines (blue)'], ['Cut', L.cut.length ? 'part outline / blank cut lines (red)' : 'none'], ...(L.lume && L.lume.length ? [['Lume', `areas to fill with ${lumeNames()} (teal outline)`]] : []), ...L.bev.map((_, i) => [`Bevel ${i + 1}`, 'inset step, one extra pass (gray)'])]
+  [['Engrave', 'filled areas (black on page 2)'], ['Score', 'hairlines (blue)'], ['Cut', L.cut.length ? 'part outline / blank cut lines (red)' : 'none'], ...(L.paint || []).map((g, i) => [`Paint ${i + 1}`, `pockets filled with ${g.col}`]), ...(L.lume && L.lume.length ? [['Lume', `areas to fill with ${lumeNames()} (teal outline)`]] : []), ...L.bev.map((_, i) => [`Bevel ${i + 1}`, 'inset step, one extra pass (gray)'])]
     .forEach(([a, c]) => { if (y > 70) { P1.t(58, y, 9.5, `${a}: ${c}`); y -= 12.5; } });
   P1.t(54, 48, 8.5, `${me.name || ''}${me.phone ? '  ·  ' + me.phone : ''}${me.email ? '  ·  ' + me.email : ''}`);
   P1.t(430, 48, 8.5, 'Page 1 of 3  ·  Dial Bench');
@@ -1483,6 +1493,23 @@ function lumeTestCardDoc() {
   doc = keep; return d;
 }
 
+/* ================= paint fill ================= */
+const PAINTDEF = {depth:0.004 * IN, mask:true, base:false, baseName:''};
+const paintCfg = () => ({...PAINTDEF, ...(proj && proj.paintStd || {}), ...(doc && doc.paint || {})});
+function setP(k, v) { doc.paint = {...(doc.paint || {}), [k]:v}; if (k === 'depth' || k === 'mask') proj.paintStd = {...(proj.paintStd || {}), [k]:v}; }
+const paintObjs = () => doc.objs.filter(o => !o.hid && o.pf && !o.lume);
+const paintOf = o => (o.col || doc.look.ink).toLowerCase();
+function paintSection() {
+  const c = paintCfg(), n = paintObjs().length, cols = [...new Set(paintObjs().map(paintOf))];
+  secEl('Paint fill', h('p', {class:'muted', style:'margin:0;font-size:13px'}, `${n} paint-filled element${n === 1 ? '' : 's'}${cols.length ? ' in ' + cols.length + ' color' + (cols.length > 1 ? 's' : '') : ''}. Turn on Paint fill for an element in Object → Engrave; it fills with that element’s color.`),
+    row('Min pocket depth', num(() => paintCfg().depth, v => setP('depth', Math.max(0.02, v)), 'L', {after:persist}), UL()),
+    row('Masking film first', tog(() => paintCfg().mask, v => setP('mask', v))),
+    h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'With masking film, the shop lasers through the film and the metal together, so the mask lines up exactly with the pockets. Leave the film on, fill, wipe, then peel.'),
+    T().panel ? null : row('Dial painted first', tog(() => paintCfg().base, v => setP('base', v), true)),
+    !T().panel && paintCfg().base ? row('Base paint', txt(() => paintCfg().baseName, v => setP('baseName', v))) : null,
+    !T().panel && paintCfg().base ? h('p', {class:'muted', style:'margin:0;font-size:13px'}, 'The laser cuts through the base coat into the metal. Order of work: paint the dial, apply film, engrave, fill, wipe, peel. Lume goes on last.') : null);
+}
+
 /* ================= boot ================= */
 function loadProj(pj) {
   proj = {v:2, cur:0, vendors:[], orders:[], me:{}, ...pj};
@@ -1500,6 +1527,6 @@ async function boot() {
   requestAnimationFrame(fit); loadFontIndex();
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
-if (location.hostname === 'localhost') window.__db = {buildLayers, svgOut, dxfOut, depthPNG, zip, readme, jobSheetPDF, preflight, get doc() { return doc; }, get proj() { return proj; }, geomOf, switchDesign, newDesign};
+if (location.hostname === 'localhost') window.__db = {buildLayers, svgOut, dxfOut, depthPNG, zip, readme, jobSheetPDF, preflight, get doc() { return doc; }, get proj() { return proj; }, geomOf, switchDesign, newDesign, select};
 boot();
 })();
